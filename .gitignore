@@ -1,0 +1,80 @@
+# Entorno virtual
+venv/
+env/
+ENV/
+
+# Variables de entorno
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Logs
+*.log
+logs/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Archivos temporales
+*.tmp
+*.temp
+*.bak
+*.swp
+
+# Node (si integras frontend con npm)
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# Archivos de Culqi/Supabase locales
+*.key
+*.pem
+secrets/
+
+# Otros
+.env.backup
+config.local.py
