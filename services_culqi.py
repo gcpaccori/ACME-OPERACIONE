@@ -12,6 +12,7 @@ CULQI_API_BASE = "https://api.culqi.com/v2"
 CULQI_MIN_ORDER_AMOUNT = 600
 CULQI_MAX_ORDER_AMOUNT = 700000
 CULQI_ORDER_DESCRIPTION_MAX_LENGTH = 80
+CULQI_SANDBOX_YAPE_PHONE = "900000001"
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 
@@ -42,6 +43,10 @@ def _build_order_number(pedido_id: int | str) -> str:
     return f"acme-{safe_reference}-{uuid.uuid4().hex[:12]}"
 
 
+def _is_test_key(value: str | None) -> bool:
+    return str(value or "").strip().startswith(("pk_test", "sk_test"))
+
+
 def _culqi_error_message(data: Dict[str, Any]) -> str:
     merchant_message = data.get("merchant_message")
     user_message = data.get("user_message")
@@ -68,6 +73,9 @@ class CulqiService:
             "Content-Type": "application/json",
             "Accept": "application/json",
         }
+
+    def _is_sandbox(self) -> bool:
+        return _is_test_key(self.public_key) or _is_test_key(self.private_key)
 
     def _request(self, method: str, path: str, payload: Dict[str, Any] | None = None) -> Dict[str, Any]:
         response = requests.request(
@@ -133,7 +141,7 @@ class CulqiService:
                 "first_name": _compact_text(first_name, "Cliente", 30),
                 "last_name": _compact_text(last_name, "ACME", 30),
                 "email": clean_email,
-                "phone_number": _normalize_phone(telefono),
+                "phone_number": CULQI_SANDBOX_YAPE_PHONE if self._is_sandbox() else _normalize_phone(telefono),
             },
             "expiration_date": int((datetime.utcnow() + timedelta(hours=24)).timestamp()),
             "confirm": True,
