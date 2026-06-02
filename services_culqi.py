@@ -1,16 +1,40 @@
-from culqi.client import Culqi
 from config import settings
 from typing import Dict, Any
 from datetime import datetime, timedelta
+import requests
 import logging
 
 logger = logging.getLogger(__name__)
+
+CULQI_API_BASE = "https://api.culqi.com/v2"
 
 class CulqiService:
     """Servicio para procesar pagos con Culqi"""
     
     def __init__(self):
-        self.client = Culqi(settings.culqi_public_key, settings.culqi_private_key)
+        self.public_key = settings.culqi_public_key
+        self.private_key = settings.culqi_private_key
+
+    def _headers(self) -> Dict[str, str]:
+        return {
+            "Authorization": f"Bearer {self.private_key}",
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        }
+
+    def _request(self, method: str, path: str, payload: Dict[str, Any] | None = None) -> Dict[str, Any]:
+        response = requests.request(
+            method,
+            f"{CULQI_API_BASE}{path}",
+            headers=self._headers(),
+            json=payload,
+            timeout=20,
+        )
+        try:
+            data = response.json()
+        except ValueError:
+            data = {"merchant_message": response.text}
+        return {"status": response.status_code, "data": data}
 
     def crear_orden_checkout(
         self,
@@ -47,7 +71,7 @@ class CulqiService:
         }
 
         try:
-            result = self.client.order.create(payload)
+            result = self._request("POST", "/orders", payload)
             data = result.get("data", {})
             status = result.get("status")
 
@@ -99,7 +123,7 @@ class CulqiService:
             logger.info(f"Procesando pago con Culqi - Token: {token[:20]}..., Monto: {monto}")
             
             # Crear carga (charge) en Culqi
-            result = self.client.charge.create({
+            result = self._request("POST", "/charges", {
                 "amount": monto,
                 "currency_code": "PEN",
                 "email": email,
@@ -147,7 +171,7 @@ class CulqiService:
     def obtener_transaccion(self, transaccion_id: str) -> Dict[str, Any]:
         """Obtener estado de una transacción existente"""
         try:
-            result = self.client.charge.read(transaccion_id)
+            result = self._request("GET", f"/charges/{transaccion_id}")
             charge = result.get("data", {})
             return {
                 "exito": True,
