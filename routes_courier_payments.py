@@ -1,3 +1,7 @@
+from concurrent.futures import ThreadPoolExecutor
+import logging
+import time
+
 from fastapi import APIRouter, Header, HTTPException
 
 from models import (
@@ -12,6 +16,7 @@ from services_culqi import CulqiService
 
 router = APIRouter(prefix="/api/courier/payments", tags=["courier-payments"])
 
+logger = logging.getLogger(__name__)
 culqi_service = CulqiService()
 CULQI_MIN_ORDER_AMOUNT = 600
 CULQI_MAX_ORDER_AMOUNT = 700000
@@ -42,6 +47,23 @@ def customer_identity(payload_email: str | None, payload_name: str | None, profi
     return email, name or "Cliente ACME", phone or None
 
 
+def needs_profile_for_order(payload: CourierPaymentOrderRequest) -> bool:
+    return not (payload.email_cliente and payload.nombre_cliente and payload.telefono_cliente)
+
+
+def needs_profile_for_charge(payload: CourierPaymentChargeRequest) -> bool:
+    return not (payload.email_cliente and payload.nombre_cliente)
+
+
+def run_parallel(*jobs) -> None:
+    if not jobs:
+        return
+    with ThreadPoolExecutor(max_workers=len(jobs)) as executor:
+        futures = [executor.submit(job) for job in jobs]
+        for future in futures:
+            future.result()
+
+
 @router.post("/order", response_model=CourierPaymentOrderResponse)
 def create_courier_payment_order(
     payload: CourierPaymentOrderRequest,
@@ -52,10 +74,11 @@ def create_courier_payment_order(
     """
     token = bearer_token(authorization)
     supabase = SupabaseCourierPayments()
+    started_at = time.perf_counter()
 
     try:
         order = supabase.get_order(payload.order_id, token)
-        profile = supabase.get_profile(order.get("customer_id"), token)
+        profile = supabase.get_profile(order.get("customer_id"), token) if needs_profile_for_order(payload) else None
         email, name, phone = customer_identity(payload.email_cliente, payload.nombre_cliente, profile)
         amount = order_amount_centimos(order)
         if amount <= 0:
@@ -88,22 +111,25 @@ def create_courier_payment_order(
             external_reference=result["order_id"],
             bearer_token=token,
         )
-        supabase.update_order_payment(
-            str(order["id"]),
-            payment_method_id=payment_method_id,
-            payment_status="pending",
-            bearer_token=token,
+        run_parallel(
+            lambda: supabase.update_order_payment(
+                str(order["id"]),
+                payment_method_id=payment_method_id,
+                payment_status="pending",
+                bearer_token=token,
+            ),
+            lambda: supabase.insert_transaction(
+                payment_id=payment_id,
+                transaction_type="authorization",
+                amount=float(order.get("total") or 0),
+                status="pending",
+                provider_transaction_id=result["order_id"],
+                request_json={"order_id": str(order["id"]), "amount": amount, "currency": "PEN"},
+                response_json=result.get("respuesta_completa"),
+                bearer_token=token,
+            ),
         )
-        supabase.insert_transaction(
-            payment_id=payment_id,
-            transaction_type="authorization",
-            amount=float(order.get("total") or 0),
-            status="pending",
-            provider_transaction_id=result["order_id"],
-            request_json={"order_id": str(order["id"]), "amount": amount, "currency": "PEN"},
-            response_json=result.get("respuesta_completa"),
-            bearer_token=token,
-        )
+        logger.info("courier_payment_order_ok order_id=%s elapsed_ms=%s", order["id"], int((time.perf_counter() - started_at) * 1000))
 
         return CourierPaymentOrderResponse(
             order_id=result["order_id"],
@@ -128,10 +154,11 @@ def charge_courier_payment(
     """
     token = bearer_token(authorization)
     supabase = SupabaseCourierPayments()
+    started_at = time.perf_counter()
 
     try:
         order = supabase.get_order(payload.order_id, token)
-        profile = supabase.get_profile(order.get("customer_id"), token)
+        profile = supabase.get_profile(order.get("customer_id"), token) if needs_profile_for_charge(payload) else None
         email, name, _phone = customer_identity(payload.email_cliente, payload.nombre_cliente, profile)
         amount = order_amount_centimos(order)
         if amount <= 0:
@@ -161,33 +188,36 @@ def charge_courier_payment(
 
         payment_status = "paid" if result.get("exito") else "failed"
         transaction_id = result.get("transaccion_id")
-        supabase.update_payment_after_charge(
-            str(payment_id),
-            status=payment_status,
-            external_reference=transaction_id or result.get("referencia"),
-            bearer_token=token,
+        run_parallel(
+            lambda: supabase.update_payment_after_charge(
+                str(payment_id),
+                status=payment_status,
+                external_reference=transaction_id or result.get("referencia"),
+                bearer_token=token,
+            ),
+            lambda: supabase.insert_transaction(
+                payment_id=str(payment_id),
+                transaction_type="capture",
+                amount=float(order.get("total") or 0),
+                status=payment_status,
+                provider_transaction_id=transaction_id,
+                request_json={
+                    "order_id": str(order["id"]),
+                    "amount": amount,
+                    "currency": "PEN",
+                    "token_prefix": payload.token[:12],
+                },
+                response_json=result.get("respuesta_completa"),
+                bearer_token=token,
+            ),
+            lambda: supabase.update_order_payment(
+                str(order["id"]),
+                payment_method_id=payment_method_id,
+                payment_status=payment_status,
+                bearer_token=token,
+            ),
         )
-        supabase.insert_transaction(
-            payment_id=str(payment_id),
-            transaction_type="capture",
-            amount=float(order.get("total") or 0),
-            status=payment_status,
-            provider_transaction_id=transaction_id,
-            request_json={
-                "order_id": str(order["id"]),
-                "amount": amount,
-                "currency": "PEN",
-                "token_prefix": payload.token[:12],
-            },
-            response_json=result.get("respuesta_completa"),
-            bearer_token=token,
-        )
-        supabase.update_order_payment(
-            str(order["id"]),
-            payment_method_id=payment_method_id,
-            payment_status=payment_status,
-            bearer_token=token,
-        )
+        logger.info("courier_payment_charge_ok order_id=%s status=%s elapsed_ms=%s", order["id"], payment_status, int((time.perf_counter() - started_at) * 1000))
 
         return CourierPaymentChargeResponse(
             exito=bool(result.get("exito")),

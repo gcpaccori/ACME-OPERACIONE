@@ -13,6 +13,10 @@ class SupabaseCourierError(Exception):
     pass
 
 
+_ONLINE_PAYMENT_METHOD_ID_CACHE: str | None = None
+_ONLINE_PAYMENT_METHOD_ID_LOADED = False
+
+
 class SupabaseCourierPayments:
     """Persistencia real del flujo courier sobre tablas Supabase."""
 
@@ -97,6 +101,11 @@ class SupabaseCourierPayments:
         return rows[0] if rows else None
 
     def get_online_payment_method_id(self, bearer_token: str | None = None) -> str | None:
+        global _ONLINE_PAYMENT_METHOD_ID_CACHE, _ONLINE_PAYMENT_METHOD_ID_LOADED
+
+        if _ONLINE_PAYMENT_METHOD_ID_LOADED:
+            return _ONLINE_PAYMENT_METHOD_ID_CACHE
+
         rows = self._request(
             "GET",
             "payment_methods",
@@ -109,14 +118,20 @@ class SupabaseCourierPayments:
             },
         )
         if not rows:
+            _ONLINE_PAYMENT_METHOD_ID_LOADED = True
+            _ONLINE_PAYMENT_METHOD_ID_CACHE = None
             return None
 
         preferred_codes = ("culqi", "culqi_online", "card_online", "yape")
         by_code = {str(row.get("code", "")).lower(): row for row in rows}
         for code in preferred_codes:
             if code in by_code:
-                return str(by_code[code]["id"])
-        return str(rows[0]["id"])
+                _ONLINE_PAYMENT_METHOD_ID_CACHE = str(by_code[code]["id"])
+                _ONLINE_PAYMENT_METHOD_ID_LOADED = True
+                return _ONLINE_PAYMENT_METHOD_ID_CACHE
+        _ONLINE_PAYMENT_METHOD_ID_CACHE = str(rows[0]["id"])
+        _ONLINE_PAYMENT_METHOD_ID_LOADED = True
+        return _ONLINE_PAYMENT_METHOD_ID_CACHE
 
     def find_pending_payment(self, order_id: str, bearer_token: str | None = None) -> dict[str, Any] | None:
         rows = self._request(
@@ -261,4 +276,3 @@ class SupabaseCourierPayments:
                 "created_at": datetime.now(timezone.utc).isoformat(),
             },
         )
-
