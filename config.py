@@ -21,5 +21,7 @@ class Settings(BaseSettings):
     api_port: int = int(os.getenv("API_PORT", "8000"))
     debug: bool = os.getenv("DEBUG", "False").lower() == "true"
     frontend_url: str = os.getenv("FRONTEND_URL", "http://localhost:3000")
+    frontend_urls: str = os.getenv("FRONTEND_URLS", "")
+    skip_legacy_db_init: bool = os.getenv("SKIP_LEGACY_DB_INIT", "False").lower() == "true"
 
 settings = Settings()

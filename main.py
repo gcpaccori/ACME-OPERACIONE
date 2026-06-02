@@ -12,6 +12,16 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
+def allowed_origins() -> list[str]:
+    origins = [
+        settings.frontend_url,
+        "http://localhost:3000",
+        "http://localhost:5173",
+    ]
+    origins.extend(origin.strip() for origin in settings.frontend_urls.split(",") if origin.strip())
+    return list(dict.fromkeys(origin for origin in origins if origin))
+
 # Crear aplicación FastAPI
 app = FastAPI(
     title="ACME Courier Payments API",
@@ -22,7 +32,8 @@ app = FastAPI(
 # Configurar CORS para permitir peticiones desde tu página web
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.frontend_url, "http://localhost:3000", "http://localhost:5173"],
+    allow_origins=allowed_origins(),
+    allow_origin_regex=r"https://.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -54,6 +65,10 @@ def root():
 @app.on_event("startup")
 async def startup():
     """Crear tablas si no existen"""
+    if settings.skip_legacy_db_init:
+        logger.info("Inicializacion de BD legacy omitida por SKIP_LEGACY_DB_INIT")
+        return
+
     try:
         init_db()
         logger.info("✅ Base de datos inicializada correctamente")
