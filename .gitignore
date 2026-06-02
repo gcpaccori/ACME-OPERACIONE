@@ -78,3 +78,4 @@ secrets/
 # Otros
 .env.backup
 config.local.py
+.vercel
