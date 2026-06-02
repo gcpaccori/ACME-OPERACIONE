@@ -5,6 +5,7 @@ from database import init_db
 import routes_products
 import routes_orders
 import routes_payments
+import routes_courier_payments
 import logging
 
 # Configurar logging
@@ -13,8 +14,8 @@ logger = logging.getLogger(__name__)
 
 # Crear aplicación FastAPI
 app = FastAPI(
-    title="ACME Ecommerce API",
-    description="API para procesamiento de compras con integración Culqi",
+    title="ACME Courier Payments API",
+    description="API para pagos Culqi del flujo courier y endpoints de prueba heredados",
     version="1.0.0"
 )
 
@@ -31,6 +32,7 @@ app.add_middleware(
 app.include_router(routes_products.router)
 app.include_router(routes_orders.router)
 app.include_router(routes_payments.router)
+app.include_router(routes_courier_payments.router)
 
 # Health check
 @app.get("/health")

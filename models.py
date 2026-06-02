@@ -88,6 +88,47 @@ class PagoResponse(BaseModel):
     transaccion_id: Optional[str] = None
     pedido_id: int
     mensaje: str
+
+class CulqiOrderRequest(BaseModel):
+    pedido_id: int
+    email_cliente: EmailStr
+    nombre_cliente: str
+    telefono_cliente: Optional[str] = None
+    descripcion: Optional[str] = None
+
+class CulqiOrderResponse(BaseModel):
+    order_id: str
+    pedido_id: int
+    monto_centimos: int
+    mensaje: str
+
+class CourierPaymentOrderRequest(BaseModel):
+    order_id: str = Field(..., min_length=1)
+    email_cliente: Optional[EmailStr] = None
+    nombre_cliente: Optional[str] = None
+    telefono_cliente: Optional[str] = None
+    descripcion: Optional[str] = None
+
+class CourierPaymentOrderResponse(BaseModel):
+    order_id: str
+    courier_order_id: str
+    payment_id: str
+    monto_centimos: int
+    mensaje: str
+
+class CourierPaymentChargeRequest(BaseModel):
+    order_id: str = Field(..., min_length=1)
+    token: str = Field(..., min_length=1)
+    payment_id: Optional[str] = None
+    email_cliente: Optional[EmailStr] = None
+    nombre_cliente: Optional[str] = None
+
+class CourierPaymentChargeResponse(BaseModel):
+    exito: bool
+    courier_order_id: str
+    payment_id: Optional[str] = None
+    transaccion_id: Optional[str] = None
+    mensaje: str
     
 class PagoStatus(BaseModel):
     transaccion_id: str
