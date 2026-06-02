@@ -13,6 +13,8 @@ from services_culqi import CulqiService
 router = APIRouter(prefix="/api/courier/payments", tags=["courier-payments"])
 
 culqi_service = CulqiService()
+CULQI_MIN_ORDER_AMOUNT = 600
+CULQI_MAX_ORDER_AMOUNT = 700000
 
 
 def bearer_token(authorization: str | None) -> str | None:
@@ -30,12 +32,14 @@ def order_amount_centimos(order: dict) -> int:
 
 
 def customer_identity(payload_email: str | None, payload_name: str | None, profile: dict | None) -> tuple[str, str, str | None]:
-    email = payload_email or (profile or {}).get("email")
-    name = payload_name or (profile or {}).get("full_name") or "Cliente ACME"
-    phone = (profile or {}).get("phone")
+    email = str(payload_email or (profile or {}).get("email") or "").strip().lower()
+    name = " ".join(str(payload_name or (profile or {}).get("full_name") or "Cliente ACME").strip().split())
+    phone = " ".join(str((profile or {}).get("phone") or "").strip().split())
     if not email:
         raise HTTPException(status_code=400, detail="El pedido no tiene email de cliente para Culqi.")
-    return str(email), str(name), str(phone) if phone else None
+    if "@" not in email or "." not in email.rsplit("@", 1)[-1]:
+        raise HTTPException(status_code=400, detail="El email del cliente no es valido para Culqi.")
+    return email, name or "Cliente ACME", phone or None
 
 
 @router.post("/order", response_model=CourierPaymentOrderResponse)
@@ -56,6 +60,13 @@ def create_courier_payment_order(
         amount = order_amount_centimos(order)
         if amount <= 0:
             raise HTTPException(status_code=400, detail="El pedido no tiene un monto valido para cobrar.")
+        if amount < CULQI_MIN_ORDER_AMOUNT:
+            raise HTTPException(
+                status_code=400,
+                detail="Culqi requiere un monto minimo de S/ 6.00 para habilitar Yape, PagoEfectivo y billeteras.",
+            )
+        if amount > CULQI_MAX_ORDER_AMOUNT:
+            raise HTTPException(status_code=400, detail="El monto del pedido excede el limite permitido por Culqi.")
 
         description = payload.descripcion or f"Pedido ACME Courier #{order.get('order_code') or order['id']}"
         result = culqi_service.crear_orden_checkout(
@@ -67,7 +78,8 @@ def create_courier_payment_order(
             descripcion=description,
         )
         if not result.get("exito"):
-            raise HTTPException(status_code=502, detail=result.get("mensaje", "No se pudo crear orden Culqi."))
+            status_code = 400 if result.get("error_tipo") in ("validation", "parameter_error") else 502
+            raise HTTPException(status_code=status_code, detail=result.get("mensaje", "No se pudo crear orden Culqi."))
 
         payment_method_id = supabase.get_online_payment_method_id(token)
         payment_id = supabase.upsert_pending_payment(
@@ -124,6 +136,10 @@ def charge_courier_payment(
         amount = order_amount_centimos(order)
         if amount <= 0:
             raise HTTPException(status_code=400, detail="El pedido no tiene un monto valido para cobrar.")
+        if amount < CULQI_MIN_ORDER_AMOUNT:
+            raise HTTPException(status_code=400, detail="Culqi requiere un monto minimo de S/ 6.00 para cobrar este pedido.")
+        if amount > CULQI_MAX_ORDER_AMOUNT:
+            raise HTTPException(status_code=400, detail="El monto del pedido excede el limite permitido por Culqi.")
 
         payment_method_id = order.get("payment_method_id") or supabase.get_online_payment_method_id(token)
         payment_id = payload.payment_id
@@ -184,4 +200,3 @@ def charge_courier_payment(
         raise
     except SupabaseCourierError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
-

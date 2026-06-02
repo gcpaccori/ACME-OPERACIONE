@@ -3,10 +3,57 @@ from typing import Dict, Any
 from datetime import datetime, timedelta
 import requests
 import logging
+import re
+import uuid
 
 logger = logging.getLogger(__name__)
 
 CULQI_API_BASE = "https://api.culqi.com/v2"
+CULQI_MIN_ORDER_AMOUNT = 600
+CULQI_MAX_ORDER_AMOUNT = 700000
+CULQI_ORDER_DESCRIPTION_MAX_LENGTH = 80
+EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+def _compact_text(value: str | None, fallback: str, max_length: int | None = None) -> str:
+    text = " ".join(str(value or "").strip().split()) or fallback
+    if max_length and len(text) > max_length:
+        return text[:max_length].rstrip()
+    return text
+
+
+def _normalize_email(value: str | None) -> str:
+    return str(value or "").strip().lower()
+
+
+def _normalize_phone(value: str | None) -> str:
+    digits = "".join(ch for ch in str(value or "") if ch.isdigit())
+    if len(digits) == 9:
+        return f"+51{digits}"
+    if digits.startswith("51") and len(digits) == 11:
+        return f"+{digits}"
+    if 9 <= len(digits) <= 15:
+        return f"+{digits}"
+    return "+51999999999"
+
+
+def _build_order_number(pedido_id: int | str) -> str:
+    safe_reference = "".join(ch for ch in str(pedido_id) if ch.isalnum())[:8] or "pedido"
+    return f"acme-{safe_reference}-{uuid.uuid4().hex[:12]}"
+
+
+def _culqi_error_message(data: Dict[str, Any]) -> str:
+    merchant_message = data.get("merchant_message")
+    user_message = data.get("user_message")
+    param = data.get("param")
+    if merchant_message:
+        detail = str(merchant_message)
+        if param:
+            detail = f"{detail} Campo: {param}."
+        return detail
+    if user_message:
+        return str(user_message)
+    return "No se pudo crear la orden Culqi"
 
 class CulqiService:
     """Servicio para procesar pagos con Culqi"""
@@ -46,21 +93,47 @@ class CulqiService:
         descripcion: str,
     ) -> Dict[str, Any]:
         """Crear una orden Culqi para habilitar checkout multipago."""
-        nombres = nombre.strip().split()
+        if monto < CULQI_MIN_ORDER_AMOUNT:
+            return {
+                "exito": False,
+                "mensaje": "Culqi requiere un monto minimo de S/ 6.00 para ordenes multipago.",
+                "respuesta_completa": None,
+                "error_tipo": "validation",
+            }
+        if monto > CULQI_MAX_ORDER_AMOUNT:
+            return {
+                "exito": False,
+                "mensaje": "El monto excede el limite permitido por Culqi para ordenes multipago.",
+                "respuesta_completa": None,
+                "error_tipo": "validation",
+            }
+
+        clean_email = _normalize_email(email)
+        if not EMAIL_RE.match(clean_email):
+            return {
+                "exito": False,
+                "mensaje": "El email del cliente no es valido para crear la orden Culqi.",
+                "respuesta_completa": None,
+                "error_tipo": "validation",
+            }
+
+        clean_name = _compact_text(nombre, "Cliente ACME")
+        nombres = clean_name.split()
         first_name = nombres[0] if nombres else "Cliente"
         last_name = " ".join(nombres[1:]) if len(nombres) > 1 else "ACME"
-        safe_reference = "".join(ch for ch in str(pedido_id) if ch.isalnum() or ch in ("-", "_"))[:32]
+        description = _compact_text(descripcion, "Pedido ACME Courier", CULQI_ORDER_DESCRIPTION_MAX_LENGTH)
+        order_number = _build_order_number(pedido_id)
 
         payload = {
             "amount": monto,
             "currency_code": "PEN",
-            "description": descripcion,
-            "order_number": f"pedido-{safe_reference}-{int(datetime.utcnow().timestamp())}",
+            "description": description,
+            "order_number": order_number,
             "client_details": {
-                "first_name": first_name,
-                "last_name": last_name,
-                "email": email,
-                "phone_number": telefono or "51999999999",
+                "first_name": _compact_text(first_name, "Cliente", 30),
+                "last_name": _compact_text(last_name, "ACME", 30),
+                "email": clean_email,
+                "phone_number": _normalize_phone(telefono),
             },
             "expiration_date": int((datetime.utcnow() + timedelta(hours=24)).timestamp()),
             "confirm": True,
@@ -76,11 +149,24 @@ class CulqiService:
             status = result.get("status")
 
             if status not in (200, 201) or not data.get("id"):
-                mensaje = data.get("user_message") or data.get("merchant_message") or "No se pudo crear la orden Culqi"
+                mensaje = _culqi_error_message(data)
+                logger.warning(
+                    "Culqi order creation failed status=%s type=%s code=%s param=%s merchant_message=%s user_message=%s order_number=%s amount=%s",
+                    status,
+                    data.get("type"),
+                    data.get("code"),
+                    data.get("param"),
+                    data.get("merchant_message"),
+                    data.get("user_message"),
+                    order_number,
+                    monto,
+                )
                 return {
                     "exito": False,
                     "mensaje": mensaje,
                     "respuesta_completa": data,
+                    "culqi_status": status,
+                    "error_tipo": data.get("type"),
                 }
 
             return {
