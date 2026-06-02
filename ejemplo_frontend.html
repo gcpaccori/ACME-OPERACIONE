@@ -1,0 +1,348 @@
+<!-- Ejemplo HTML + JavaScript para tu página web -->
+<!-- Este archivo muestra cómo integrar la API con Culqi -->
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tienda ACME - Compra Ahora</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', sans-serif; background: #f5f5f5; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        header { background: #2c3e50; color: white; padding: 20px; margin-bottom: 30px; }
+        h1 { margin-bottom: 10px; }
+        .productos { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; margin-bottom: 40px; }
+        .producto { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        .producto h3 { margin: 10px 0; color: #2c3e50; }
+        .producto p { color: #666; font-size: 14px; margin: 5px 0; }
+        .precio { font-size: 24px; color: #27ae60; font-weight: bold; margin: 15px 0; }
+        .cantidad { display: flex; gap: 5px; margin: 10px 0; }
+        .cantidad input { width: 60px; padding: 5px; border: 1px solid #ddd; border-radius: 4px; }
+        .btn { padding: 10px 20px; background: #27ae60; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; }
+        .btn:hover { background: #229954; }
+        .btn-danger { background: #e74c3c; }
+        .btn-danger:hover { background: #c0392b; }
+        .carrito { background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
+        .carrito h2 { margin-bottom: 20px; color: #2c3e50; }
+        .item-carrito { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #eee; }
+        .total { text-align: right; font-size: 20px; font-weight: bold; color: #27ae60; padding: 20px 0; }
+        .checkout-form { background: white; padding: 20px; border-radius: 8px; max-width: 500px; }
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; margin-bottom: 5px; font-weight: bold; color: #2c3e50; }
+        .form-group input { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; }
+        .alert { padding: 15px; margin-bottom: 20px; border-radius: 4px; }
+        .alert-success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .alert-error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .loading { display: none; text-align: center; padding: 20px; }
+        .spinner { border: 4px solid #f3f3f3; border-top: 4px solid #27ae60; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 0 auto; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>🛒 Tienda ACME</h1>
+        <p>Compra tus productos favoritos y paga con seguridad</p>
+    </header>
+
+    <div class="container">
+        <!-- Alertas -->
+        <div id="alert"></div>
+
+        <!-- Productos -->
+        <div class="productos" id="productosContainer">
+            <div class="loading"><div class="spinner"></div><p>Cargando productos...</p></div>
+        </div>
+
+        <!-- Carrito -->
+        <div class="carrito">
+            <h2>🛍️ Tu Carrito</h2>
+            <div id="carritoItems"></div>
+            <div class="total">Total: S/ <span id="totalCarrito">0.00</span></div>
+            <button class="btn btn-danger" onclick="limpiarCarrito()">Limpiar Carrito</button>
+        </div>
+
+        <!-- Formulario de Checkout -->
+        <div class="checkout-form" id="checkoutForm" style="display: none;">
+            <h2>📋 Información de Envío</h2>
+            <form id="formCliente">
+                <div class="form-group">
+                    <label>Nombre Completo *</label>
+                    <input type="text" id="nombre" required>
+                </div>
+                <div class="form-group">
+                    <label>Email *</label>
+                    <input type="email" id="email" required>
+                </div>
+                <div class="form-group">
+                    <label>Teléfono</label>
+                    <input type="tel" id="telefono">
+                </div>
+                <div class="form-group">
+                    <label>Dirección *</label>
+                    <input type="text" id="direccion" required>
+                </div>
+                <div class="form-group">
+                    <label>Ciudad *</label>
+                    <input type="text" id="ciudad" required>
+                </div>
+                <button type="button" class="btn" onclick="procesarPago()">Proceder al Pago</button>
+            </form>
+        </div>
+
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>Procesando tu pago...</p>
+        </div>
+    </div>
+
+    <!-- Script de Culqi (incluir antes de cerrar body) -->
+    <script src="https://checkout.culqi.com/js/v3"></script>
+    
+    <script>
+        const API_URL = 'http://localhost:8000'; // Cambiar a tu URL de producción
+        let carrito = [];
+        let pedidoCreado = null;
+
+        // Inicializar Culqi
+        function inicializarCulqi() {
+            Culqi.publicKey = 'tu_clave_publica_aqui'; // Cambiar por tu clave pública de Culqi
+        }
+
+        // Cargar productos
+        async function cargarProductos() {
+            try {
+                const response = await fetch(`${API_URL}/api/products`);
+                const productos = await response.json();
+                
+                const html = productos.map(p => `
+                    <div class="producto">
+                        <h3>${p.nombre}</h3>
+                        <p>${p.descripcion}</p>
+                        <p><strong>Stock:</strong> ${p.stock}</p>
+                        <div class="precio">S/ ${p.precio.toFixed(2)}</div>
+                        <div class="cantidad">
+                            <input type="number" id="qty-${p.id}" value="1" min="1" max="${p.stock}">
+                            <button class="btn" onclick="agregarAlCarrito(${p.id}, '${p.nombre}', ${p.precio}, ${p.stock})">
+                                Agregar
+                            </button>
+                        </div>
+                    </div>
+                `).join('');
+                
+                document.getElementById('productosContainer').innerHTML = html;
+            } catch (error) {
+                mostrarAlerta('Error al cargar productos', 'error');
+                console.error(error);
+            }
+        }
+
+        // Agregar al carrito
+        function agregarAlCarrito(id, nombre, precio, stock) {
+            const cantidad = parseInt(document.getElementById(`qty-${id}`).value);
+            
+            if (cantidad <= 0 || cantidad > stock) {
+                mostrarAlerta('Cantidad inválida', 'error');
+                return;
+            }
+
+            const item = carrito.find(i => i.producto_id === id);
+            if (item) {
+                item.cantidad += cantidad;
+            } else {
+                carrito.push({ producto_id: id, nombre, precio, cantidad });
+            }
+
+            actualizarCarrito();
+            mostrarAlerta(`${nombre} agregado al carrito`, 'success');
+        }
+
+        // Actualizar vista del carrito
+        function actualizarCarrito() {
+            const html = carrito.map((item, idx) => `
+                <div class="item-carrito">
+                    <div>
+                        <strong>${item.nombre}</strong><br>
+                        Cantidad: ${item.cantidad} x S/ ${item.precio.toFixed(2)}
+                    </div>
+                    <div>
+                        <strong>S/ ${(item.cantidad * item.precio).toFixed(2)}</strong>
+                        <button class="btn btn-danger" onclick="removerDelCarrito(${idx})">✕</button>
+                    </div>
+                </div>
+            `).join('');
+
+            document.getElementById('carritoItems').innerHTML = html || '<p>Carrito vacío</p>';
+
+            const total = carrito.reduce((sum, item) => sum + (item.cantidad * item.precio), 0);
+            document.getElementById('totalCarrito').textContent = total.toFixed(2);
+
+            // Mostrar formulario de checkout si hay items
+            document.getElementById('checkoutForm').style.display = carrito.length > 0 ? 'block' : 'none';
+        }
+
+        // Remover del carrito
+        function removerDelCarrito(idx) {
+            carrito.splice(idx, 1);
+            actualizarCarrito();
+        }
+
+        // Limpiar carrito
+        function limpiarCarrito() {
+            carrito = [];
+            actualizarCarrito();
+        }
+
+        // Procesar pago
+        async function procesarPago() {
+            if (carrito.length === 0) {
+                mostrarAlerta('El carrito está vacío', 'error');
+                return;
+            }
+
+            const nombre = document.getElementById('nombre').value;
+            const email = document.getElementById('email').value;
+            const telefono = document.getElementById('telefono').value;
+            const direccion = document.getElementById('direccion').value;
+            const ciudad = document.getElementById('ciudad').value;
+
+            if (!nombre || !email || !direccion || !ciudad) {
+                mostrarAlerta('Por favor completa todos los campos requeridos', 'error');
+                return;
+            }
+
+            // Mostrar loading
+            document.getElementById('loading').style.display = 'block';
+
+            try {
+                // 1. Crear pedido
+                const pedidoData = {
+                    cliente: {
+                        nombre,
+                        email,
+                        telefono,
+                        direccion,
+                        ciudad,
+                        pais: "PE"
+                    },
+                    items: carrito.map(item => ({
+                        producto_id: item.producto_id,
+                        cantidad: item.cantidad
+                    }))
+                };
+
+                const respPedido = await fetch(`${API_URL}/api/orders`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(pedidoData)
+                });
+
+                if (!respPedido.ok) {
+                    throw new Error('Error al crear pedido');
+                }
+
+                pedidoCreado = await respPedido.json();
+                console.log('Pedido creado:', pedidoCreado);
+
+                // 2. Generar token con Culqi
+                mostrarAlerta('Abriendo formulario de pago...', 'success');
+                
+                // Esperar a que Culqi.Token esté listo
+                setTimeout(() => {
+                    const total = carrito.reduce((sum, item) => sum + (item.cantidad * item.precio), 0);
+                    
+                    Culqi.Token.init({
+                        publicKey: Culqi.publicKey, // Cambiar por tu clave
+                        options: {
+                            lang: 'es',
+                            modal: true,
+                            installments: false,
+                            paymentMethods: {
+                                tarjeta: true,
+                                yape: true,
+                                billetera: true
+                            }
+                        },
+                        dataExtra: {
+                            bin: "",
+                            afiliation_id: ""
+                        },
+                        payload: {
+                            amount: Math.round(total * 100), // En céntimos
+                            currency_code: "PEN",
+                            email: email,
+                            description: `Compra de ${carrito.length} producto(s)`
+                        },
+                        onSuccess: function(token) {
+                            enviarPago(token.id, total);
+                        },
+                        onError: function(data) {
+                            document.getElementById('loading').style.display = 'none';
+                            mostrarAlerta(`Error: ${data.user_message}`, 'error');
+                        }
+                    });
+
+                    Culqi.Token.open();
+                }, 500);
+
+            } catch (error) {
+                document.getElementById('loading').style.display = 'none';
+                mostrarAlerta(error.message, 'error');
+                console.error(error);
+            }
+        }
+
+        // Enviar pago a la API
+        async function enviarPago(token, monto) {
+            try {
+                const pagoData = {
+                    pedido_id: pedidoCreado.id,
+                    monto: monto,
+                    token: token,
+                    email_cliente: document.getElementById('email').value,
+                    nombre_cliente: document.getElementById('nombre').value,
+                    descripcion: `Compra de ${carrito.length} producto(s)`
+                };
+
+                const respPago = await fetch(`${API_URL}/api/pay`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(pagoData)
+                });
+
+                const resultado = await respPago.json();
+                document.getElementById('loading').style.display = 'none';
+
+                if (resultado.exito) {
+                    mostrarAlerta(`✅ ¡Pago exitoso! Transacción: ${resultado.transaccion_id}`, 'success');
+                    limpiarCarrito();
+                    document.getElementById('formCliente').reset();
+                    document.getElementById('checkoutForm').style.display = 'none';
+                } else {
+                    mostrarAlerta(`❌ Pago fallido: ${resultado.mensaje}`, 'error');
+                }
+            } catch (error) {
+                document.getElementById('loading').style.display = 'none';
+                mostrarAlerta('Error procesando pago', 'error');
+                console.error(error);
+            }
+        }
+
+        // Mostrar alertas
+        function mostrarAlerta(mensaje, tipo) {
+            const alert = document.getElementById('alert');
+            const className = tipo === 'error' ? 'alert-error' : 'alert-success';
+            alert.innerHTML = `<div class="alert ${className}">${mensaje}</div>`;
+            setTimeout(() => { alert.innerHTML = ''; }, 5000);
+        }
+
+        // Inicializar
+        window.addEventListener('DOMContentLoaded', () => {
+            inicializarCulqi();
+            cargarProductos();
+            actualizarCarrito();
+        });
+    </script>
+</body>
+</html>
