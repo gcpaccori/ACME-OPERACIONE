@@ -96,7 +96,7 @@ def create_courier_payment_order(
         )
         supabase.insert_transaction(
             payment_id=payment_id,
-            transaction_type="order",
+            transaction_type="authorization",
             amount=float(order.get("total") or 0),
             status="pending",
             provider_transaction_id=result["order_id"],
@@ -169,7 +169,7 @@ def charge_courier_payment(
         )
         supabase.insert_transaction(
             payment_id=str(payment_id),
-            transaction_type="charge",
+            transaction_type="capture",
             amount=float(order.get("total") or 0),
             status=payment_status,
             provider_transaction_id=transaction_id,
