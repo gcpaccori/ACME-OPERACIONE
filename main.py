@@ -6,6 +6,10 @@ import routes_products
 import routes_orders
 import routes_payments
 import routes_courier_payments
+import routes_courier_quote
+import routes_courier_orders
+import routes_webhooks
+import routes_admin_refunds
 import logging
 
 # Configurar logging
@@ -44,6 +48,10 @@ app.include_router(routes_products.router)
 app.include_router(routes_orders.router)
 app.include_router(routes_payments.router)
 app.include_router(routes_courier_payments.router)
+app.include_router(routes_courier_quote.router)
+app.include_router(routes_courier_orders.router)
+app.include_router(routes_webhooks.router)
+app.include_router(routes_admin_refunds.router)
 
 # Health check
 @app.get("/health")

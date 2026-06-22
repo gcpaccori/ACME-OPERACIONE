@@ -138,3 +138,74 @@ class PagoStatus(BaseModel):
     
     class Config:
         from_attributes = True
+
+# ============ COURIER QUOTE ============
+class QuoteItemInput(BaseModel):
+    product_id: str = Field(..., min_length=1)
+    quantity: int = Field(..., gt=0)
+    modifier_ids: List[str] = Field(default_factory=list)
+
+class CourierQuoteRequest(BaseModel):
+    branch_id: str = Field(..., min_length=1)
+    payment_method: str = Field(default='card')
+    tip_amount: float = Field(default=0.0, ge=0)
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    fulfillment_type: str = Field(default='delivery')
+    items: List[QuoteItemInput] = Field(..., min_length=1)
+
+class CourierQuoteResponse(BaseModel):
+    quote_id: str
+    subtotal: float
+    discount: float
+    service_fee: float
+    service_fee_rate: float
+    delivery_fee: float
+    tip_amount: float
+    total: float
+    distance_km: Optional[float] = None
+    expires_at: str
+
+# ============ COURIER ORDERS ============
+class CourierOrderDeliveryAddress(BaseModel):
+    line1: str = Field(..., min_length=1)
+    line2: Optional[str] = None
+    reference: Optional[str] = None
+    district: Optional[str] = None
+    city: Optional[str] = None
+    region: Optional[str] = None
+    country: str = Field(default='Peru')
+    lat: Optional[float] = None
+    lng: Optional[float] = None
+
+class CourierCreateOrderRequest(BaseModel):
+    quote_id: str = Field(..., min_length=1)
+    fulfillment_type: str = Field(default='delivery')
+    special_instructions: Optional[str] = None
+    recipient_name: Optional[str] = None
+    recipient_phone: Optional[str] = None
+    address: Optional[CourierOrderDeliveryAddress] = None
+
+class CourierCreateOrderResponse(BaseModel):
+    order_id: str
+    order_code: int
+    total: float
+    payment_status: str
+
+# ============ WEBHOOK CULQI ============
+class CulqiWebhookPayload(BaseModel):
+    id: Optional[str] = None
+    type: Optional[str] = None
+    data: Optional[dict] = None
+
+# ============ ADMIN REFUNDS ============
+class AdminRefundRequest(BaseModel):
+    order_id: str = Field(..., min_length=1)
+    reason: Optional[str] = None
+    amount: Optional[float] = None  # None = reembolso total
+
+class AdminRefundResponse(BaseModel):
+    exito: bool
+    refund_id: Optional[str] = None
+    amount: Optional[float] = None
+    mensaje: str

@@ -151,6 +151,7 @@ def charge_courier_payment(
 ):
     """
     Cobrar un pedido real del courier con un token generado por Culqi Checkout.
+    Idempotente: si ya existe un payment_attempt 'paid' para este order_id, devuelve el resultado anterior.
     """
     token = bearer_token(authorization)
     supabase = SupabaseCourierPayments()
@@ -178,6 +179,32 @@ def charge_courier_payment(
                 bearer_token=token,
             )
 
+        # Idempotencia: verificar si ya existe un payment_attempt 'paid' para este order
+        idempotency_key = f"charge-{order['id']}-{payment_id}"
+        existing_attempt = supabase.get_paid_payment_attempt(str(order["id"]), bearer_token=token)
+        if existing_attempt:
+            logger.info(
+                "courier_payment_charge_idempotent order_id=%s attempt_id=%s",
+                order["id"], existing_attempt.get("id"),
+            )
+            prev_meta = existing_attempt.get("metadata") or {}
+            return CourierPaymentChargeResponse(
+                exito=True,
+                courier_order_id=str(order["id"]),
+                payment_id=str(payment_id),
+                transaccion_id=str(prev_meta.get("provider_payment_id") or existing_attempt.get("provider_payment_id") or ""),
+                mensaje="Pago ya procesado anteriormente (idempotente)",
+            )
+
+        # Crear payment_attempt antes del cargo
+        supabase.create_payment_attempt(
+            order_id=str(order["id"]),
+            idempotency_key=idempotency_key,
+            amount=float(order.get("total") or 0),
+            status="pending",
+            bearer_token=token,
+        )
+
         result = culqi_service.procesar_pago(
             token=payload.token,
             monto=amount,
@@ -188,6 +215,16 @@ def charge_courier_payment(
 
         payment_status = "paid" if result.get("exito") else "failed"
         transaction_id = result.get("transaccion_id")
+
+        # Actualizar payment_attempt con resultado
+        supabase.update_payment_attempt(
+            idempotency_key=idempotency_key,
+            provider_payment_id=transaction_id,
+            status=payment_status,
+            metadata=result.get("respuesta_completa"),
+            bearer_token=token,
+        )
+
         run_parallel(
             lambda: supabase.update_payment_after_charge(
                 str(payment_id),

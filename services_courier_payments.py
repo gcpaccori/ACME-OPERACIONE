@@ -276,3 +276,85 @@ class SupabaseCourierPayments:
                 "created_at": datetime.now(timezone.utc).isoformat(),
             },
         )
+
+    # ------------------------------------------------------------------
+    # payment_attempts - idempotencia
+    # ------------------------------------------------------------------
+
+    def get_paid_payment_attempt(self, order_id: str, bearer_token: str | None = None) -> dict[str, Any] | None:
+        """Devuelve el primer payment_attempt con status='paid' para el order_id dado."""
+        rows = self._request(
+            "GET",
+            "payment_attempts",
+            bearer_token=bearer_token,
+            params={
+                "select": "id,order_id,idempotency_key,provider_payment_id,status,metadata",
+                "order_id": f"eq.{order_id}",
+                "status": "eq.paid",
+                "order": "created_at.desc",
+                "limit": "1",
+            },
+        )
+        return rows[0] if rows else None
+
+    def create_payment_attempt(
+        self,
+        *,
+        order_id: str,
+        idempotency_key: str,
+        amount: float,
+        status: str = "pending",
+        bearer_token: str | None = None,
+    ) -> str:
+        """Crea un payment_attempt nuevo. Si la idempotency_key ya existe, no falla (ignora el error)."""
+        now = datetime.now(timezone.utc).isoformat()
+        attempt_id = str(uuid4())
+        try:
+            self._request(
+                "POST",
+                "payment_attempts",
+                bearer_token=bearer_token,
+                json={
+                    "id": attempt_id,
+                    "order_id": order_id,
+                    "provider": "culqi",
+                    "idempotency_key": idempotency_key,
+                    "amount": amount,
+                    "status": status,
+                    "created_at": now,
+                    "updated_at": now,
+                },
+                prefer="return=minimal",
+            )
+        except SupabaseCourierError:
+            # La clave de idempotencia ya existe u otro error menor; continuar
+            pass
+        return attempt_id
+
+    def update_payment_attempt(
+        self,
+        *,
+        idempotency_key: str,
+        provider_payment_id: str | None,
+        status: str,
+        metadata: Any | None = None,
+        bearer_token: str | None = None,
+    ) -> None:
+        """Actualiza el payment_attempt por idempotency_key con el resultado del cargo."""
+        now = datetime.now(timezone.utc).isoformat()
+        try:
+            self._request(
+                "PATCH",
+                "payment_attempts",
+                bearer_token=bearer_token,
+                params={"idempotency_key": f"eq.{idempotency_key}"},
+                json={
+                    "status": status,
+                    "provider_payment_id": provider_payment_id,
+                    "metadata": metadata,
+                    "updated_at": now,
+                },
+            )
+        except SupabaseCourierError:
+            # No bloquear el flujo principal si falla la actualizacion del intento
+            pass
