@@ -29,7 +29,7 @@ class SupabaseQuoteService:
             raise SupabaseQuoteError("Falta SUPABASE_SERVICE_ROLE_KEY o SUPABASE_ANON_KEY para Supabase.")
 
     def _headers(self, bearer_token: str | None = None, prefer: str | None = None) -> dict[str, str]:
-        token = bearer_token or self.default_bearer
+        token = settings.supabase_service_role_key or bearer_token or self.default_bearer
         headers = {
             "apikey": self.api_key,
             "Authorization": f"Bearer {token}",
