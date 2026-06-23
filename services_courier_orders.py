@@ -3,7 +3,6 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid4
-import random
 import logging
 
 import requests
@@ -69,6 +68,27 @@ class SupabaseOrderService:
             return None
         return response.json()
 
+    def _rpc(
+        self,
+        name: str,
+        *,
+        bearer_token: str | None = None,
+        json: Any | None = None,
+    ) -> Any:
+        response = requests.post(
+            f"{self.base_url}/rpc/{name}",
+            headers=self._headers(bearer_token),
+            json=json,
+            timeout=15,
+        )
+        if response.status_code >= 400:
+            detail = response.text[:500]
+            raise SupabaseOrderError(f"Supabase rpc/{name} devolvio {response.status_code}: {detail}")
+
+        if not response.text:
+            return None
+        return response.json()
+
     def get_active_quote(self, quote_id: str, customer_id: str, bearer_token: str | None = None) -> dict[str, Any] | None:
         now_iso = datetime.now(timezone.utc).isoformat()
         rows = self._request(
@@ -86,21 +106,20 @@ class SupabaseOrderService:
         )
         return rows[0] if rows else None
 
-    def _next_order_code(self) -> int:
-        """Intenta obtener el siguiente order_code de la secuencia; fallback a random 6 digitos."""
-        try:
-            # Llamar a una funcion RPC de Supabase si existe
-            response = requests.post(
-                f"{self.base_url}/rpc/next_order_code",
-                headers=self._headers(),
-                timeout=10,
-            )
-            if response.status_code == 200 and response.text:
-                return int(response.json())
-        except Exception:
-            pass
-        # Fallback: 6 digitos aleatorios
-        return random.randint(100000, 999999)
+    def get_branch(self, branch_id: str, bearer_token: str | None = None) -> dict[str, Any]:
+        rows = self._request(
+            "GET",
+            "merchant_branches",
+            bearer_token=bearer_token,
+            params={
+                "select": "id,merchant_id",
+                "id": f"eq.{branch_id}",
+                "limit": "1",
+            },
+        )
+        if not rows:
+            raise SupabaseOrderError(f"Sucursal '{branch_id}' no encontrada en Supabase.")
+        return rows[0]
 
     def create_order_from_quote(
         self,
@@ -111,14 +130,20 @@ class SupabaseOrderService:
     ) -> dict[str, Any]:
         """
         Crea el pedido completo en Supabase a partir de una cotizacion validada.
-        Ejecuta: address insert, order insert, order_items insert,
-                 order_delivery_details insert, order_status_history insert,
-                 y marca la cotizacion como 'used'.
+        Usa la RPC create_order_from_quote para que orders, order_items,
+        order_delivery_details, order_status_history y order_quotes se escriban
+        de forma atomica contra el esquema real de Supabase.
         """
-        now = datetime.now(timezone.utc).isoformat()
         fulfillment_type = delivery_data.get("fulfillment_type", "delivery")
+        branch_id = str(quote.get("branch_id") or "")
+        if not branch_id:
+            raise SupabaseOrderError("La cotizacion no tiene branch_id.")
 
-        # 1. INSERT en addresses (si delivery y hay datos de direccion)
+        branch = self.get_branch(branch_id, bearer_token)
+        merchant_id = str(branch.get("merchant_id") or "")
+        if not merchant_id:
+            raise SupabaseOrderError(f"La sucursal '{branch_id}' no tiene merchant_id.")
+
         address_id: str | None = None
         addr = delivery_data.get("address")
         if fulfillment_type == "delivery" and addr:
@@ -147,124 +172,50 @@ class SupabaseOrderService:
                 logger.warning("No se pudo crear la direccion: %s", exc)
                 address_id = None
 
-        # 2. INSERT en orders
-        order_id = str(uuid4())
-        order_code = self._next_order_code()
-        order_payload = {
-            "id": order_id,
-            "order_code": order_code,
-            "customer_id": customer_id,
-            "merchant_id": quote.get("merchant_id"),
-            "branch_id": quote.get("branch_id"),
-            "status": "placed",
-            "payment_status": "pending",
-            "subtotal": float(quote.get("subtotal", 0)),
-            "discount": float(quote.get("discount", 0)),
-            "delivery_fee": float(quote.get("delivery_fee", 0)),
-            "service_fee": float(quote.get("service_fee", 0)),
-            "tip_amount": float(quote.get("tip_amount", 0)),
-            "total": float(quote.get("total", 0)),
-            "currency": "PEN",
-            "quote_id": quote.get("id"),
-            "fulfillment_type": fulfillment_type,
-            "special_instructions": delivery_data.get("special_instructions"),
-            "placed_at": now,
-            "created_at": now,
-            "updated_at": now,
-        }
-        if address_id:
-            order_payload["delivery_address_id"] = address_id
-
-        order_rows = self._request(
-            "POST",
-            "orders",
-            bearer_token=bearer_token,
-            json=order_payload,
-            prefer="return=representation",
-        )
-        if order_rows:
-            created_order = order_rows[0]
-        else:
-            created_order = order_payload
-
-        # 3. INSERT en order_items
-        items_snapshot: list[dict[str, Any]] = quote.get("items_snapshot") or []
-        for item in items_snapshot:
-            item_payload = {
-                "id": str(uuid4()),
-                "order_id": order_id,
+        items_payload: list[dict[str, Any]] = []
+        for item in quote.get("items_snapshot") or []:
+            unit_price = float(item.get("unit_price", item.get("customer_unit_price", 0)) or 0)
+            items_payload.append({
                 "product_id": item.get("product_id"),
-                "product_name_snapshot": item.get("product_name", ""),
-                "unit_price": float(item.get("unit_price", 0)),
-                "quantity": int(item.get("quantity", 1)),
+                "product_name_snapshot": item.get("product_name_snapshot") or item.get("product_name", ""),
+                "unit_price": unit_price,
+                "quantity": int(item.get("quantity", 1) or 1),
                 "notes": item.get("notes"),
-                "line_total": float(item.get("line_total", 0)),
-            }
-            try:
-                self._request(
-                    "POST",
-                    "order_items",
-                    bearer_token=bearer_token,
-                    json=item_payload,
-                    prefer="return=minimal",
-                )
-            except SupabaseOrderError as exc:
-                logger.warning("Error insertando order_item product=%s: %s", item.get("product_id"), exc)
+                "line_total": float(item.get("line_total", 0) or 0),
+                "customer_unit_price": float(item.get("customer_unit_price", unit_price) or 0),
+                "merchant_unit_price": float(item.get("merchant_unit_price", unit_price) or 0),
+                "platform_margin": float(item.get("platform_margin", 0) or 0),
+            })
 
-        # 4. INSERT en order_delivery_details (si delivery)
-        if fulfillment_type == "delivery":
-            delivery_detail_payload = {
-                "id": str(uuid4()),
-                "order_id": order_id,
-                "recipient_name": delivery_data.get("recipient_name"),
-                "recipient_phone": delivery_data.get("recipient_phone"),
-                "address_id": address_id,
-                "created_at": now,
-            }
-            try:
-                self._request(
-                    "POST",
-                    "order_delivery_details",
-                    bearer_token=bearer_token,
-                    json=delivery_detail_payload,
-                    prefer="return=minimal",
-                )
-            except SupabaseOrderError as exc:
-                logger.warning("No se pudo crear order_delivery_details: %s", exc)
-
-        # 5. INSERT en order_status_history
-        history_payload = {
-            "id": str(uuid4()),
-            "order_id": order_id,
-            "status": "placed",
-            "notes": "Pedido creado desde cotizacion",
-            "created_at": now,
+        rpc_payload = {
+            "p_quote_id": quote.get("id"),
+            "p_customer_id": customer_id,
+            "p_merchant_id": merchant_id,
+            "p_branch_id": branch_id,
+            "p_fulfillment_type": fulfillment_type,
+            "p_special_instructions": delivery_data.get("special_instructions"),
+            "p_payment_method_id": None,
+            "p_address_id": address_id,
+            "p_address_snapshot": addr.get("line1") if addr else None,
+            "p_reference_snapshot": addr.get("reference") if addr else None,
+            "p_district_snapshot": addr.get("district") if addr else None,
+            "p_city_snapshot": addr.get("city") if addr else None,
+            "p_region_snapshot": addr.get("region") if addr else None,
+            "p_recipient_name": delivery_data.get("recipient_name"),
+            "p_recipient_phone": delivery_data.get("recipient_phone"),
+            "p_lat": addr.get("lat") if addr else None,
+            "p_lng": addr.get("lng") if addr else None,
+            "p_items": items_payload,
         }
-        try:
-            self._request(
-                "POST",
-                "order_status_history",
-                bearer_token=bearer_token,
-                json=history_payload,
-                prefer="return=minimal",
-            )
-        except SupabaseOrderError as exc:
-            logger.warning("No se pudo crear order_status_history: %s", exc)
 
-        # 6. Marcar cotizacion como 'used'
-        try:
-            self._request(
-                "PATCH",
-                "order_quotes",
-                bearer_token=bearer_token,
-                params={"id": f"eq.{quote['id']}"},
-                json={"status": "used"},
-            )
-        except SupabaseOrderError as exc:
-            logger.warning("No se pudo marcar quote como usado: %s", exc)
+        result = self._rpc(
+            "create_order_from_quote",
+            bearer_token=bearer_token,
+            json=rpc_payload,
+        ) or {}
 
         return {
-            "order_id": order_id,
-            "order_code": order_code,
-            "total": float(quote.get("total", 0)),
+            "order_id": str(result.get("order_id") or ""),
+            "order_code": int(result.get("order_code") or 0),
+            "total": float(result.get("total") or quote.get("total", 0)),
         }
