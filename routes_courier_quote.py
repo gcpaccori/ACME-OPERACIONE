@@ -13,6 +13,7 @@ from services_courier_quote import (
     calculate_distance_km,
     calculate_service_fee,
 )
+from services_supabase_auth import SupabaseAuthError, verify_supabase_user
 
 router = APIRouter(prefix="/api/courier", tags=["courier-quote"])
 logger = logging.getLogger(__name__)
@@ -29,24 +30,6 @@ def _extract_bearer(authorization: str | None) -> str | None:
     return token.strip()
 
 
-def _decode_jwt_sub(token: str) -> str | None:
-    """Extrae el 'sub' del payload JWT sin verificar firma (base64 decode del segundo segmento)."""
-    try:
-        import base64
-        import json as _json
-        parts = token.split(".")
-        if len(parts) < 2:
-            return None
-        # Agregar padding si es necesario
-        padding = 4 - len(parts[1]) % 4
-        padded = parts[1] + ("=" * (padding % 4))
-        decoded = base64.urlsafe_b64decode(padded)
-        payload = _json.loads(decoded)
-        return str(payload.get("sub") or "")
-    except Exception:
-        return None
-
-
 @router.post("/quote", response_model=CourierQuoteResponse)
 def create_courier_quote(
     payload: CourierQuoteRequest,
@@ -61,9 +44,10 @@ def create_courier_quote(
     if not token:
         raise HTTPException(status_code=401, detail="Se requiere Bearer token para cotizar.")
 
-    customer_id = _decode_jwt_sub(token)
-    if not customer_id:
-        raise HTTPException(status_code=401, detail="No se pudo extraer el customer_id del token.")
+    try:
+        customer_id = verify_supabase_user(token)
+    except SupabaseAuthError as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
 
     supabase = SupabaseQuoteService()
 

@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-import base64
-import json
 import logging
 
 from fastapi import APIRouter, Header, HTTPException
 
 from models import CourierCreateOrderRequest, CourierCreateOrderResponse
 from services_courier_orders import SupabaseOrderError, SupabaseOrderService
+from services_supabase_auth import SupabaseAuthError, verify_supabase_user
 
 router = APIRouter(prefix="/api/courier", tags=["courier-orders"])
 logger = logging.getLogger(__name__)
@@ -20,21 +19,6 @@ def _extract_bearer(authorization: str | None) -> str | None:
     if scheme.lower() != "bearer" or not token:
         return None
     return token.strip()
-
-
-def _decode_jwt_sub(token: str) -> str | None:
-    """Extrae el 'sub' del payload JWT sin verificar firma (base64 decode del segundo segmento)."""
-    try:
-        parts = token.split(".")
-        if len(parts) < 2:
-            return None
-        padding = 4 - len(parts[1]) % 4
-        padded = parts[1] + ("=" * (padding % 4))
-        decoded = base64.urlsafe_b64decode(padded)
-        payload = json.loads(decoded)
-        return str(payload.get("sub") or "")
-    except Exception:
-        return None
 
 
 @router.post("/orders", response_model=CourierCreateOrderResponse)
@@ -50,9 +34,10 @@ def create_courier_order(
     if not token:
         raise HTTPException(status_code=401, detail="Se requiere Bearer token para crear pedidos.")
 
-    customer_id = _decode_jwt_sub(token)
-    if not customer_id:
-        raise HTTPException(status_code=401, detail="No se pudo extraer el customer_id del token.")
+    try:
+        customer_id = verify_supabase_user(token)
+    except SupabaseAuthError as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
 
     supabase = SupabaseOrderService()
 
