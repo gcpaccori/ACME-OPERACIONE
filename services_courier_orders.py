@@ -68,27 +68,6 @@ class SupabaseOrderService:
             return None
         return response.json()
 
-    def _rpc(
-        self,
-        name: str,
-        *,
-        bearer_token: str | None = None,
-        json: Any | None = None,
-    ) -> Any:
-        response = requests.post(
-            f"{self.base_url}/rpc/{name}",
-            headers=self._headers(bearer_token),
-            json=json,
-            timeout=15,
-        )
-        if response.status_code >= 400:
-            detail = response.text[:500]
-            raise SupabaseOrderError(f"Supabase rpc/{name} devolvio {response.status_code}: {detail}")
-
-        if not response.text:
-            return None
-        return response.json()
-
     def get_active_quote(self, quote_id: str, customer_id: str, bearer_token: str | None = None) -> dict[str, Any] | None:
         now_iso = datetime.now(timezone.utc).isoformat()
         rows = self._request(
@@ -130,10 +109,10 @@ class SupabaseOrderService:
     ) -> dict[str, Any]:
         """
         Crea el pedido completo en Supabase a partir de una cotizacion validada.
-        Usa la RPC create_order_from_quote para que orders, order_items,
-        order_delivery_details, order_status_history y order_quotes se escriban
-        de forma atomica contra el esquema real de Supabase.
+        Escribe contra el esquema real de Supabase. La secuencia de order_code
+        vive como DEFAULT en orders, asi que el backend no calcula correlativos.
         """
+        now = datetime.now(timezone.utc).isoformat()
         fulfillment_type = delivery_data.get("fulfillment_type", "delivery")
         branch_id = str(quote.get("branch_id") or "")
         if not branch_id:
@@ -172,10 +151,47 @@ class SupabaseOrderService:
                 logger.warning("No se pudo crear la direccion: %s", exc)
                 address_id = None
 
+        order_id = str(uuid4())
+        order_payload = {
+            "id": order_id,
+            "customer_id": customer_id,
+            "merchant_id": merchant_id,
+            "branch_id": branch_id,
+            "status": "placed",
+            "payment_status": "pending",
+            "subtotal": float(quote.get("subtotal", 0) or 0),
+            "products_total": float(quote.get("subtotal", 0) or 0),
+            "discount_total": float(quote.get("discount", 0) or 0),
+            "delivery_fee": float(quote.get("delivery_fee", 0) or 0),
+            "service_fee": float(quote.get("service_fee", 0) or 0),
+            "service_fee_rate": float(quote.get("service_fee_rate", 0.036) or 0.036),
+            "tip_amount": float(quote.get("tip_amount", 0) or 0),
+            "tax_amount": 0,
+            "total": float(quote.get("total", 0) or 0),
+            "currency": "PEN",
+            "quote_id": quote.get("id"),
+            "fulfillment_type": fulfillment_type,
+            "special_instructions": delivery_data.get("special_instructions"),
+            "placed_at": now,
+            "created_at": now,
+            "updated_at": now,
+        }
+
+        order_rows = self._request(
+            "POST",
+            "orders",
+            bearer_token=bearer_token,
+            json=order_payload,
+            prefer="return=representation",
+        )
+        created_order = order_rows[0] if order_rows else order_payload
+
         items_payload: list[dict[str, Any]] = []
         for item in quote.get("items_snapshot") or []:
             unit_price = float(item.get("unit_price", item.get("customer_unit_price", 0)) or 0)
             items_payload.append({
+                "id": str(uuid4()),
+                "order_id": order_id,
                 "product_id": item.get("product_id"),
                 "product_name_snapshot": item.get("product_name_snapshot") or item.get("product_name", ""),
                 "unit_price": unit_price,
@@ -185,37 +201,70 @@ class SupabaseOrderService:
                 "customer_unit_price": float(item.get("customer_unit_price", unit_price) or 0),
                 "merchant_unit_price": float(item.get("merchant_unit_price", unit_price) or 0),
                 "platform_margin": float(item.get("platform_margin", 0) or 0),
+                "created_at": now,
             })
 
-        rpc_payload = {
-            "p_quote_id": quote.get("id"),
-            "p_customer_id": customer_id,
-            "p_merchant_id": merchant_id,
-            "p_branch_id": branch_id,
-            "p_fulfillment_type": fulfillment_type,
-            "p_special_instructions": delivery_data.get("special_instructions"),
-            "p_payment_method_id": None,
-            "p_address_id": address_id,
-            "p_address_snapshot": addr.get("line1") if addr else None,
-            "p_reference_snapshot": addr.get("reference") if addr else None,
-            "p_district_snapshot": addr.get("district") if addr else None,
-            "p_city_snapshot": addr.get("city") if addr else None,
-            "p_region_snapshot": addr.get("region") if addr else None,
-            "p_recipient_name": delivery_data.get("recipient_name"),
-            "p_recipient_phone": delivery_data.get("recipient_phone"),
-            "p_lat": addr.get("lat") if addr else None,
-            "p_lng": addr.get("lng") if addr else None,
-            "p_items": items_payload,
-        }
+        if items_payload:
+            self._request(
+                "POST",
+                "order_items",
+                bearer_token=bearer_token,
+                json=items_payload,
+                prefer="return=minimal",
+            )
 
-        result = self._rpc(
-            "create_order_from_quote",
+        if fulfillment_type == "delivery" and addr:
+            delivery_detail_payload = {
+                "order_id": order_id,
+                "address_id": address_id,
+                "address_snapshot": addr.get("line1"),
+                "reference_snapshot": addr.get("reference"),
+                "district_snapshot": addr.get("district"),
+                "city_snapshot": addr.get("city"),
+                "region_snapshot": addr.get("region"),
+                "lat": addr.get("lat"),
+                "lng": addr.get("lng"),
+                "recipient_name": delivery_data.get("recipient_name"),
+                "recipient_phone": delivery_data.get("recipient_phone"),
+                "created_at": now,
+                "updated_at": now,
+            }
+            self._request(
+                "POST",
+                "order_delivery_details",
+                bearer_token=bearer_token,
+                json=delivery_detail_payload,
+                prefer="return=minimal",
+            )
+
+        history_payload = {
+            "id": str(uuid4()),
+            "order_id": order_id,
+            "from_status": "placed",
+            "to_status": "placed",
+            "actor_user_id": customer_id,
+            "actor_type": "customer",
+            "note": f"Pedido creado desde cotizacion {quote.get('id')}",
+            "created_at": now,
+        }
+        self._request(
+            "POST",
+            "order_status_history",
             bearer_token=bearer_token,
-            json=rpc_payload,
-        ) or {}
+            json=history_payload,
+            prefer="return=minimal",
+        )
+
+        self._request(
+            "PATCH",
+            "order_quotes",
+            bearer_token=bearer_token,
+            params={"id": f"eq.{quote['id']}"},
+            json={"status": "used"},
+        )
 
         return {
-            "order_id": str(result.get("order_id") or ""),
-            "order_code": int(result.get("order_code") or 0),
-            "total": float(result.get("total") or quote.get("total", 0)),
+            "order_id": order_id,
+            "order_code": int(created_order.get("order_code") or 0),
+            "total": float(created_order.get("total") or quote.get("total", 0)),
         }
