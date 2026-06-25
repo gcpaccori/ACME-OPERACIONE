@@ -5,10 +5,13 @@ from typing import Any
 
 from fastapi import APIRouter, Header, HTTPException, Query
 
+from config import settings
 from models import CourierQuoteRequest, CourierQuoteResponse, CourierReverseGeocodeResponse
 from services_courier_quote import (
     SupabaseQuoteError,
     SupabaseQuoteService,
+    calculate_included_igv,
+    calculate_payment_processing_fee,
     calculate_road_distance_km,
     calculate_service_fee,
     reverse_geocode_point,
@@ -154,16 +157,24 @@ def create_courier_quote(
         # 8. Base para tarifa de servicio
         base = subtotal - discount
 
-        # 9. Tarifa de servicio
+        # 9. Tarifa de servicio ACME
         service_fee = calculate_service_fee(base)
+        service_fee_rate = float(settings.platform_service_fee_rate or 0.036)
 
         # 10. Tip
         tip_amount = round(float(payload.tip_amount), 2)
 
-        # 11. Total
-        total = round(base + service_fee + delivery_fee + tip_amount, 2)
+        # 11. IGV incluido y comision Culqi
+        taxable_total = round(base + service_fee + delivery_fee, 2)
+        tax_breakdown = calculate_included_igv(taxable_total)
+        payment_base = round(taxable_total + tip_amount, 2)
+        processing = calculate_payment_processing_fee(payment_base)
+        payment_processing_fee = float(processing["fee"])
 
-        # 12. Guardar cotizacion
+        # 12. Total
+        total = round(payment_base + payment_processing_fee, 2)
+
+        # 13. Guardar cotizacion
         quote = supabase.save_quote(
             customer_id=customer_id,
             branch_id=payload.branch_id,
@@ -178,6 +189,15 @@ def create_courier_quote(
             payment_method=payload.payment_method,
             fulfillment_type=payload.fulfillment_type,
             items_snapshot=items_snapshot,
+            taxable_base=float(tax_breakdown["taxable_base"]),
+            igv_rate=float(tax_breakdown["igv_rate"]),
+            igv_amount=float(tax_breakdown["igv_amount"]),
+            payment_processing_fee=payment_processing_fee,
+            payment_processing_rate=float(processing["rate"]),
+            payment_processing_fixed=float(processing["fixed"]),
+            payment_processing_provider=str(processing["provider"]),
+            payment_processing_note=str(processing["note"]),
+            payment_processing_tax_amount=float(processing["tax_amount"]),
             bearer_token=token,
         )
 
@@ -191,9 +211,18 @@ def create_courier_quote(
             subtotal=subtotal,
             discount=discount,
             service_fee=service_fee,
-            service_fee_rate=0.036,
+            service_fee_rate=service_fee_rate,
             delivery_fee=delivery_fee,
             tip_amount=tip_amount,
+            taxable_base=float(tax_breakdown["taxable_base"]),
+            igv_rate=float(tax_breakdown["igv_rate"]),
+            igv_amount=float(tax_breakdown["igv_amount"]),
+            payment_processing_fee=payment_processing_fee,
+            payment_processing_rate=float(processing["rate"]),
+            payment_processing_fixed=float(processing["fixed"]),
+            payment_processing_provider=str(processing["provider"]),
+            payment_processing_note=str(processing["note"]),
+            payment_processing_tax_amount=float(processing["tax_amount"]),
             total=total,
             distance_km=distance_km,
             delivery_zone=str(tariff.get("zona_codigo") or ""),

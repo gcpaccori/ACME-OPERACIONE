@@ -173,6 +173,15 @@ class CourierQuoteResponse(BaseModel):
     service_fee_rate: float
     delivery_fee: float
     tip_amount: float
+    taxable_base: float = 0.0
+    igv_rate: float = 0.18
+    igv_amount: float = 0.0
+    payment_processing_fee: float = 0.0
+    payment_processing_rate: float = 0.0
+    payment_processing_fixed: float = 0.0
+    payment_processing_provider: str = "culqi"
+    payment_processing_note: Optional[str] = None
+    payment_processing_tax_amount: float = 0.0
     total: float
     distance_km: Optional[float] = None
     delivery_zone: Optional[str] = None

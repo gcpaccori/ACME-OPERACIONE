@@ -28,6 +28,14 @@ class Settings(BaseSettings):
     geocoding_api_url: str = os.getenv("GEOCODING_API_URL", "https://nominatim.openstreetmap.org/reverse")
     geocoding_user_agent: str = os.getenv("GEOCODING_USER_AGENT", "ACME-Courier-Huancavelica/1.0")
     geocoding_timeout_seconds: float = float(os.getenv("GEOCODING_TIMEOUT_SECONDS", "5.0"))
+    platform_service_fee_rate: float = float(os.getenv("PLATFORM_SERVICE_FEE_RATE", "0.036"))
+    igv_rate: float = float(os.getenv("IGV_RATE", "0.18"))
+    culqi_online_rate: float = float(os.getenv("CULQI_ONLINE_RATE", "0.0344"))
+    culqi_online_fixed_usd: float = float(os.getenv("CULQI_ONLINE_FIXED_USD", "0.20"))
+    culqi_exchange_rate: float = float(os.getenv("CULQI_EXCHANGE_RATE", "3.85"))
+    culqi_min_fee_pen: float = float(os.getenv("CULQI_MIN_FEE_PEN", "3.50"))
+    culqi_min_threshold_pen: float = float(os.getenv("CULQI_MIN_THRESHOLD_PEN", "87.72"))
+    pass_culqi_fee_to_customer: bool = os.getenv("PASS_CULQI_FEE_TO_CUSTOMER", "True").lower() == "true"
 
     @field_validator("debug", "skip_legacy_db_init", mode="before")
     @classmethod

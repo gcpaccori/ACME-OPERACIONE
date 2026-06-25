@@ -166,7 +166,16 @@ class SupabaseOrderService:
             "service_fee": float(quote.get("service_fee", 0) or 0),
             "service_fee_rate": float(quote.get("service_fee_rate", 0.036) or 0.036),
             "tip_amount": float(quote.get("tip_amount", 0) or 0),
-            "tax_amount": 0,
+            "tax_amount": float(quote.get("igv_amount", quote.get("tax_amount", 0)) or 0),
+            "taxable_base": float(quote.get("taxable_base", 0) or 0),
+            "igv_rate": float(quote.get("igv_rate", 0.18) or 0.18),
+            "igv_amount": float(quote.get("igv_amount", 0) or 0),
+            "payment_processing_fee": float(quote.get("payment_processing_fee", 0) or 0),
+            "payment_processing_rate": float(quote.get("payment_processing_rate", 0) or 0),
+            "payment_processing_fixed": float(quote.get("payment_processing_fixed", 0) or 0),
+            "payment_processing_provider": quote.get("payment_processing_provider") or "culqi",
+            "payment_processing_note": quote.get("payment_processing_note"),
+            "payment_processing_tax_amount": float(quote.get("payment_processing_tax_amount", 0) or 0),
             "total": float(quote.get("total", 0) or 0),
             "currency": "PEN",
             "quote_id": quote.get("id"),
@@ -177,13 +186,37 @@ class SupabaseOrderService:
             "updated_at": now,
         }
 
-        order_rows = self._request(
-            "POST",
-            "orders",
-            bearer_token=bearer_token,
-            json=order_payload,
-            prefer="return=representation",
-        )
+        optional_order_columns = {
+            "taxable_base",
+            "igv_rate",
+            "igv_amount",
+            "payment_processing_fee",
+            "payment_processing_rate",
+            "payment_processing_fixed",
+            "payment_processing_provider",
+            "payment_processing_note",
+            "payment_processing_tax_amount",
+        }
+        try:
+            order_rows = self._request(
+                "POST",
+                "orders",
+                bearer_token=bearer_token,
+                json=order_payload,
+                prefer="return=representation",
+            )
+        except SupabaseOrderError as exc:
+            detail = str(exc).lower()
+            if "schema cache" not in detail and "column" not in detail:
+                raise
+            legacy_payload = {key: value for key, value in order_payload.items() if key not in optional_order_columns}
+            order_rows = self._request(
+                "POST",
+                "orders",
+                bearer_token=bearer_token,
+                json=legacy_payload,
+                prefer="return=representation",
+            )
         created_order = order_rows[0] if order_rows else order_payload
 
         items_payload: list[dict[str, Any]] = []

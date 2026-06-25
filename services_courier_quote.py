@@ -188,6 +188,15 @@ class SupabaseQuoteService:
         payment_method: str,
         fulfillment_type: str,
         items_snapshot: list[dict[str, Any]],
+        taxable_base: float = 0.0,
+        igv_rate: float = 0.18,
+        igv_amount: float = 0.0,
+        payment_processing_fee: float = 0.0,
+        payment_processing_rate: float = 0.0,
+        payment_processing_fixed: float = 0.0,
+        payment_processing_provider: str = "culqi",
+        payment_processing_note: str | None = None,
+        payment_processing_tax_amount: float = 0.0,
         bearer_token: str | None = None,
     ) -> dict[str, Any]:
         now = datetime.now(timezone.utc)
@@ -203,6 +212,15 @@ class SupabaseQuoteService:
             "service_fee_rate": service_fee_rate,
             "delivery_fee": delivery_fee,
             "tip_amount": tip_amount,
+            "taxable_base": taxable_base,
+            "igv_rate": igv_rate,
+            "igv_amount": igv_amount,
+            "payment_processing_fee": payment_processing_fee,
+            "payment_processing_rate": payment_processing_rate,
+            "payment_processing_fixed": payment_processing_fixed,
+            "payment_processing_provider": payment_processing_provider,
+            "payment_processing_note": payment_processing_note,
+            "payment_processing_tax_amount": payment_processing_tax_amount,
             "total": total,
             "distance_km": distance_km,
             "payment_method": payment_method,
@@ -212,15 +230,39 @@ class SupabaseQuoteService:
             "expires_at": expires_at.isoformat(),
             "created_at": now.isoformat(),
         }
-        rows = self._request(
-            "POST",
-            "order_quotes",
-            bearer_token=bearer_token,
-            json=payload,
-            prefer="return=representation",
-        )
+        try:
+            rows = self._request(
+                "POST",
+                "order_quotes",
+                bearer_token=bearer_token,
+                json=payload,
+                prefer="return=representation",
+            )
+        except SupabaseQuoteError as exc:
+            detail = str(exc).lower()
+            optional_columns = {
+                "taxable_base",
+                "igv_rate",
+                "igv_amount",
+                "payment_processing_fee",
+                "payment_processing_rate",
+                "payment_processing_fixed",
+                "payment_processing_provider",
+                "payment_processing_note",
+                "payment_processing_tax_amount",
+            }
+            if "schema cache" not in detail and "column" not in detail:
+                raise
+            legacy_payload = {key: value for key, value in payload.items() if key not in optional_columns}
+            rows = self._request(
+                "POST",
+                "order_quotes",
+                bearer_token=bearer_token,
+                json=legacy_payload,
+                prefer="return=representation",
+            )
         if rows:
-            return rows[0]
+            return {**payload, **rows[0]}
         return payload
 
     def get_active_quote(self, quote_id: str, customer_id: str, bearer_token: str | None = None) -> dict[str, Any] | None:
@@ -292,6 +334,51 @@ def calculate_road_distance_km(lat1: float, lng1: float, lat2: float, lng2: floa
     return fallback_km
 
 
+def calculate_payment_processing_fee(amount: float) -> dict[str, Any]:
+    """Comision referencial CulqiOnline para pagos nacionales."""
+    if not settings.pass_culqi_fee_to_customer or amount <= 0:
+        return {
+            "fee": 0.0,
+            "rate": settings.culqi_online_rate,
+            "fixed": round(settings.culqi_online_fixed_usd * settings.culqi_exchange_rate, 2),
+            "provider": "culqi",
+            "note": "Comision Culqi absorbida por el comercio.",
+            "tax_amount": 0.0,
+        }
+
+    rate = max(0.0, float(settings.culqi_online_rate or 0.0))
+    fixed_pen = round(max(0.0, float(settings.culqi_online_fixed_usd or 0.0)) * max(0.0, float(settings.culqi_exchange_rate or 0.0)), 2)
+    min_fee = max(0.0, float(settings.culqi_min_fee_pen or 0.0))
+    threshold = max(0.0, float(settings.culqi_min_threshold_pen or 0.0))
+
+    if amount < threshold:
+        fee = max(min_fee, round(amount * rate + fixed_pen, 2))
+        note = f"CulqiOnline nacional: minimo S/ {min_fee:.2f} para montos menores a S/ {threshold:.2f}; comision inafecta a IGV."
+    else:
+        fee = round(((amount + fixed_pen) / max(0.0001, 1 - rate)) - amount, 2)
+        note = f"CulqiOnline nacional: {rate * 100:.2f}% + USD {settings.culqi_online_fixed_usd:.2f}; comision inafecta a IGV."
+
+    return {
+        "fee": fee,
+        "rate": rate,
+        "fixed": fixed_pen,
+        "provider": "culqi",
+        "note": note,
+        "tax_amount": 0.0,
+    }
+
+
+def calculate_included_igv(taxable_total: float) -> dict[str, float]:
+    """Descompone un precio con IGV incluido en base imponible e impuesto."""
+    rate = max(0.0, float(settings.igv_rate or 0.0))
+    amount = max(0.0, float(taxable_total or 0.0))
+    if rate <= 0:
+        return {"taxable_base": round(amount, 2), "igv_amount": 0.0, "igv_rate": rate}
+    taxable_base = round(amount / (1 + rate), 2)
+    igv_amount = round(amount - taxable_base, 2)
+    return {"taxable_base": taxable_base, "igv_amount": igv_amount, "igv_rate": rate}
+
+
 def reverse_geocode_point(lat: float, lng: float) -> dict[str, str | None]:
     """Obtiene direccion referencial para un punto usando Nominatim compatible."""
     response = requests.get(
@@ -354,4 +441,4 @@ def calculate_delivery_fee(distance_km: float, fulfillment_type: str) -> float:
 
 def calculate_service_fee(base_amount: float) -> float:
     """Tarifa de servicio = 3.6% del subtotal neto."""
-    return round(base_amount * 0.036, 2)
+    return round(base_amount * float(settings.platform_service_fee_rate or 0.036), 2)
