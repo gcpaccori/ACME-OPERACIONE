@@ -224,6 +224,7 @@ class SupabaseOrderService:
                 "region_snapshot": addr.get("region"),
                 "lat": addr.get("lat"),
                 "lng": addr.get("lng"),
+                "estimated_distance_km": quote.get("distance_km"),
                 "recipient_name": delivery_data.get("recipient_name"),
                 "recipient_phone": delivery_data.get("recipient_phone"),
                 "created_at": now,

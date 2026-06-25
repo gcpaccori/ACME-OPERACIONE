@@ -152,7 +152,18 @@ class CourierQuoteRequest(BaseModel):
     latitude: Optional[float] = None
     longitude: Optional[float] = None
     fulfillment_type: str = Field(default='delivery')
+    zone: Optional[str] = None
+    weight_kg: float = Field(default=1.0, ge=0)
+    service_type: str = Field(default='normal')
+    is_difficult_zone: bool = Field(default=False)
+    is_out_of_city: bool = Field(default=False)
+    wait_or_second_visit: bool = Field(default=False)
     items: List[QuoteItemInput] = Field(..., min_length=1)
+
+class CourierTariffSurcharge(BaseModel):
+    code: str
+    label: str
+    amount: float
 
 class CourierQuoteResponse(BaseModel):
     quote_id: str
@@ -164,6 +175,11 @@ class CourierQuoteResponse(BaseModel):
     tip_amount: float
     total: float
     distance_km: Optional[float] = None
+    delivery_zone: Optional[str] = None
+    delivery_zone_label: Optional[str] = None
+    delivery_detail: Optional[str] = None
+    delivery_surcharges_total: float = 0.0
+    delivery_surcharges: List[CourierTariffSurcharge] = Field(default_factory=list)
     expires_at: str
 
 # ============ COURIER ORDERS ============

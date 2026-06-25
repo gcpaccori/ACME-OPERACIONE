@@ -1,0 +1,55 @@
+{
+  "city": "Huancavelica",
+  "coverage_area_km2": 10,
+  "rounding_increment": 0.5,
+  "rounding_mode": "nearest",
+  "service_surcharges": {
+    "normal": 0,
+    "express": 0.3,
+    "scheduled": 0
+  },
+  "weight": {
+    "included_kg": 2,
+    "step_kg": 1,
+    "fee_per_step": 1.5
+  },
+  "difficult_zone_fee": 3,
+  "wait_or_second_visit_fee": 3,
+  "outside_city": {
+    "base_fee": 10,
+    "cost_per_km": 2
+  },
+  "zones": [
+    {
+      "code": "A",
+      "label": "Zona A",
+      "name": "Casco urbano centrico",
+      "description": "Tarifa centrica dentro de Huancavelica",
+      "max_distance_km": 2,
+      "base_fee": 5.5
+    },
+    {
+      "code": "B",
+      "label": "Zona B",
+      "name": "Zona urbana conectada",
+      "description": "Tarifa urbana media dentro de Huancavelica",
+      "max_distance_km": 5,
+      "base_fee": 8
+    },
+    {
+      "code": "C",
+      "label": "Zona C",
+      "name": "Periferia urbana o zonas altas",
+      "description": "Tarifa periferica urbana o acceso lento",
+      "max_distance_km": 10,
+      "base_fee": 12
+    },
+    {
+      "code": "D",
+      "label": "Zona D",
+      "name": "Fuera de ciudad",
+      "description": "Tarifa fuera del casco urbano con costo por kilometro",
+      "base_fee": 10
+    }
+  ]
+}

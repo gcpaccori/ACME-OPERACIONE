@@ -8,6 +8,7 @@ import math
 import requests
 
 from config import settings
+from services_courier_tariffs import TariffZoneOverride, extract_zone_code
 
 
 class SupabaseQuoteError(Exception):
@@ -111,6 +112,63 @@ class SupabaseQuoteService:
         )
         return rows or []
 
+    def get_delivery_zone_overrides(self, branch_id: str, bearer_token: str | None = None) -> dict[str, TariffZoneOverride]:
+        rows = self._request(
+            "GET",
+            "branch_delivery_zones",
+            bearer_token=bearer_token,
+            params={
+                "select": "zone_id,fee_override,is_active",
+                "branch_id": f"eq.{branch_id}",
+                "is_active": "eq.true",
+            },
+        ) or []
+        zone_ids = [str(row.get("zone_id")) for row in rows if row.get("zone_id")]
+        relation_by_zone_id = {str(row.get("zone_id")): row for row in rows if row.get("zone_id")}
+
+        if zone_ids:
+            zones = self._request(
+                "GET",
+                "delivery_zones",
+                bearer_token=bearer_token,
+                params={
+                    "select": "id,name,base_fee,estimated_minutes,is_active",
+                    "id": f"in.({','.join(zone_ids)})",
+                    "is_active": "eq.true",
+                },
+            ) or []
+        else:
+            zones = self._request(
+                "GET",
+                "delivery_zones",
+                bearer_token=bearer_token,
+                params={
+                    "select": "id,name,base_fee,estimated_minutes,is_active",
+                    "is_active": "eq.true",
+                },
+            ) or []
+
+        overrides: dict[str, TariffZoneOverride] = {}
+        for zone in zones:
+            code = extract_zone_code(str(zone.get("name") or ""))
+            if not code:
+                continue
+            relation = relation_by_zone_id.get(str(zone.get("id"))) or {}
+            fee_override = relation.get("fee_override")
+            base_fee = fee_override if fee_override is not None else zone.get("base_fee")
+            try:
+                estimated = int(zone["estimated_minutes"]) if zone.get("estimated_minutes") is not None else None
+            except (TypeError, ValueError):
+                estimated = None
+            overrides[code] = TariffZoneOverride(
+                zone_id=str(zone.get("id") or ""),
+                code=code,
+                label=str(zone.get("name") or f"Zona {code}"),
+                base_fee=float(base_fee) if base_fee is not None else None,
+                estimated_minutes=estimated,
+            )
+        return overrides
+
     def save_quote(
         self,
         *,
@@ -125,6 +183,7 @@ class SupabaseQuoteService:
         total: float,
         distance_km: float | None,
         payment_method: str,
+        fulfillment_type: str,
         items_snapshot: list[dict[str, Any]],
         bearer_token: str | None = None,
     ) -> dict[str, Any]:
@@ -144,6 +203,7 @@ class SupabaseQuoteService:
             "total": total,
             "distance_km": distance_km,
             "payment_method": payment_method,
+            "fulfillment_type": fulfillment_type,
             "items_snapshot": items_snapshot,
             "status": "active",
             "expires_at": expires_at.isoformat(),

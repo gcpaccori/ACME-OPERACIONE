@@ -1,6 +1,6 @@
 import os
 from pydantic_settings import BaseSettings
-from pydantic import ConfigDict
+from pydantic import ConfigDict, field_validator
 
 class Settings(BaseSettings):
     model_config = ConfigDict(env_file=".env", case_sensitive=False, extra="ignore")
@@ -23,5 +23,19 @@ class Settings(BaseSettings):
     frontend_url: str = os.getenv("FRONTEND_URL", "http://localhost:3000")
     frontend_urls: str = os.getenv("FRONTEND_URLS", "")
     skip_legacy_db_init: bool = os.getenv("SKIP_LEGACY_DB_INIT", "False").lower() == "true"
+
+    @field_validator("debug", "skip_legacy_db_init", mode="before")
+    @classmethod
+    def parse_bool_like(cls, value):
+        if isinstance(value, bool):
+            return value
+        if value is None:
+            return False
+        normalized = str(value).strip().lower()
+        if normalized in {"1", "true", "yes", "on", "debug", "development"}:
+            return True
+        if normalized in {"0", "false", "no", "off", "release", "production", "prod", ""}:
+            return False
+        return value
 
 settings = Settings()

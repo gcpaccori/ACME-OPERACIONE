@@ -9,10 +9,10 @@ from models import CourierQuoteRequest, CourierQuoteResponse
 from services_courier_quote import (
     SupabaseQuoteError,
     SupabaseQuoteService,
-    calculate_delivery_fee,
     calculate_distance_km,
     calculate_service_fee,
 )
+from services_courier_tariffs import calculate_courier_tariff
 from services_supabase_auth import SupabaseAuthError, verify_supabase_user
 
 router = APIRouter(prefix="/api/courier", tags=["courier-quote"])
@@ -89,11 +89,20 @@ def create_courier_quote(
                 )
             distance_km = _FALLBACK_DISTANCE_KM
 
-        # 3. Calcular delivery_fee (puede lanzar ValueError si fuera de cobertura)
-        try:
-            delivery_fee = calculate_delivery_fee(distance_km, payload.fulfillment_type)
-        except ValueError as exc:
-            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        # 3. Calcular tarifa courier por zonas urbanas de Huancavelica
+        zone_overrides = supabase.get_delivery_zone_overrides(payload.branch_id, token)
+        tariff = calculate_courier_tariff(
+            distance_km=distance_km,
+            zone=payload.zone,
+            weight_kg=payload.weight_kg,
+            service_type=payload.service_type,
+            is_difficult_zone=payload.is_difficult_zone,
+            is_out_of_city=payload.is_out_of_city,
+            wait_or_second_visit=payload.wait_or_second_visit,
+            fulfillment_type=payload.fulfillment_type,
+            zone_overrides=zone_overrides,
+        )
+        delivery_fee = float(tariff["tarifa_final"])
 
         # 4. Obtener precios reales de productos desde Supabase
         all_product_ids = list({item.product_id for item in payload.items})
@@ -166,6 +175,7 @@ def create_courier_quote(
             total=total,
             distance_km=distance_km,
             payment_method=payload.payment_method,
+            fulfillment_type=payload.fulfillment_type,
             items_snapshot=items_snapshot,
             bearer_token=token,
         )
@@ -185,6 +195,11 @@ def create_courier_quote(
             tip_amount=tip_amount,
             total=total,
             distance_km=distance_km,
+            delivery_zone=str(tariff.get("zona_codigo") or ""),
+            delivery_zone_label=str(tariff.get("zona_aplicada") or ""),
+            delivery_detail=str(tariff.get("detalle_calculo") or ""),
+            delivery_surcharges_total=float(tariff.get("recargos_total") or 0),
+            delivery_surcharges=tariff.get("recargos") or [],
             expires_at=str(quote.get("expires_at", "")),
         )
 
