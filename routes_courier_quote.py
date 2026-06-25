@@ -3,14 +3,15 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, Header, HTTPException, Query
 
-from models import CourierQuoteRequest, CourierQuoteResponse
+from models import CourierQuoteRequest, CourierQuoteResponse, CourierReverseGeocodeResponse
 from services_courier_quote import (
     SupabaseQuoteError,
     SupabaseQuoteService,
-    calculate_distance_km,
+    calculate_road_distance_km,
     calculate_service_fee,
+    reverse_geocode_point,
 )
 from services_courier_tariffs import calculate_courier_tariff
 from services_supabase_auth import SupabaseAuthError, verify_supabase_user
@@ -72,7 +73,7 @@ def create_courier_quote(
         )
 
         if has_client_coords and has_branch_coords:
-            distance_km = calculate_distance_km(
+            distance_km = calculate_road_distance_km(
                 float(client_lat), float(client_lng),
                 float(branch_lat), float(branch_lng),
             )
@@ -210,3 +211,16 @@ def create_courier_quote(
     except Exception as exc:
         logger.error("courier_quote_unexpected_error: %s", exc, exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error interno al generar cotizacion: {exc}") from exc
+
+
+@router.get("/reverse-geocode", response_model=CourierReverseGeocodeResponse)
+def reverse_geocode(
+    lat: float = Query(..., ge=-90, le=90),
+    lng: float = Query(..., ge=-180, le=180),
+):
+    """Direccion referencial desde coordenadas seleccionadas en mapa."""
+    try:
+        return CourierReverseGeocodeResponse(**reverse_geocode_point(lat, lng))
+    except Exception as exc:
+        logger.warning("reverse_geocode_failed lat=%s lng=%s error=%s", lat, lng, exc)
+        raise HTTPException(status_code=502, detail="No se pudo obtener direccion del mapa.") from exc

@@ -3,12 +3,15 @@ from __future__ import annotations
 from datetime import datetime, timezone, timedelta
 from typing import Any
 from uuid import uuid4
+import logging
 import math
 
 import requests
 
 from config import settings
 from services_courier_tariffs import TariffZoneOverride, extract_zone_code
+
+logger = logging.getLogger(__name__)
 
 
 class SupabaseQuoteError(Exception):
@@ -261,6 +264,79 @@ def calculate_distance_km(lat1: float, lng1: float, lat2: float, lng2: float) ->
     a = math.sin(d_phi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(d_lambda / 2) ** 2
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
     return R * c
+
+
+def calculate_road_distance_km(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
+    """Distancia vial usando un router compatible con OSRM /route/v1."""
+    fallback_km = calculate_distance_km(lat1, lng1, lat2, lng2)
+    routing_base_url = (settings.routing_api_url or "").rstrip("/")
+    if not routing_base_url:
+        return fallback_km
+
+    url = f"{routing_base_url}/route/v1/driving/{lng1},{lat1};{lng2},{lat2}"
+    try:
+        response = requests.get(
+            url,
+            params={"overview": "false", "steps": "false"},
+            timeout=max(1.0, float(settings.routing_timeout_seconds or 4.0)),
+        )
+        response.raise_for_status()
+        data = response.json()
+        route = (data.get("routes") or [None])[0]
+        distance_m = route.get("distance") if isinstance(route, dict) else None
+        if data.get("code") == "Ok" and distance_m is not None:
+            return round(max(0.0, float(distance_m)) / 1000, 2)
+    except Exception as exc:
+        logger.warning("road_distance_fallback error=%s", exc)
+
+    return fallback_km
+
+
+def reverse_geocode_point(lat: float, lng: float) -> dict[str, str | None]:
+    """Obtiene direccion referencial para un punto usando Nominatim compatible."""
+    response = requests.get(
+        settings.geocoding_api_url,
+        params={
+            "format": "jsonv2",
+            "lat": lat,
+            "lon": lng,
+            "accept-language": "es",
+            "zoom": "18",
+            "addressdetails": "1",
+        },
+        headers={
+            "Accept": "application/json",
+            "User-Agent": settings.geocoding_user_agent,
+        },
+        timeout=max(1.0, float(settings.geocoding_timeout_seconds or 5.0)),
+    )
+    response.raise_for_status()
+    data = response.json()
+    address = data.get("address") or {}
+    road = (
+        address.get("road")
+        or address.get("pedestrian")
+        or address.get("footway")
+        or address.get("path")
+        or address.get("neighbourhood")
+        or address.get("suburb")
+    )
+    house_number = address.get("house_number")
+    line1 = " ".join(str(value) for value in [road, house_number] if value).strip() or data.get("name")
+
+    return {
+        "line1": line1 or None,
+        "district": (
+            address.get("city_district")
+            or address.get("suburb")
+            or address.get("neighbourhood")
+            or address.get("district")
+        ),
+        "city": address.get("city") or address.get("town") or address.get("village") or address.get("county"),
+        "region": address.get("state") or address.get("region"),
+        "country": address.get("country"),
+        "display_name": data.get("display_name"),
+    }
 
 
 def calculate_delivery_fee(distance_km: float, fulfillment_type: str) -> float:
