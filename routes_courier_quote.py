@@ -6,7 +6,7 @@ from typing import Any
 from fastapi import APIRouter, Header, HTTPException, Query
 
 from config import settings
-from models import CourierQuoteRequest, CourierQuoteResponse, CourierReverseGeocodeResponse
+from models import CourierGeocodeSearchResult, CourierQuoteRequest, CourierQuoteResponse, CourierReverseGeocodeResponse
 from services_courier_quote import (
     SupabaseQuoteError,
     SupabaseQuoteService,
@@ -15,6 +15,7 @@ from services_courier_quote import (
     calculate_road_distance_km,
     calculate_service_fee,
     reverse_geocode_point,
+    search_geocode_address,
 )
 from services_courier_tariffs import calculate_courier_tariff
 from services_supabase_auth import SupabaseAuthError, verify_supabase_user
@@ -253,3 +254,16 @@ def reverse_geocode(
     except Exception as exc:
         logger.warning("reverse_geocode_failed lat=%s lng=%s error=%s", lat, lng, exc)
         raise HTTPException(status_code=502, detail="No se pudo obtener direccion del mapa.") from exc
+
+
+@router.get("/geocode-search", response_model=list[CourierGeocodeSearchResult])
+def geocode_search(
+    q: str = Query(..., min_length=3, max_length=160),
+    limit: int = Query(default=6, ge=1, le=10),
+):
+    """Busca direcciones candidatas dentro de Huancavelica."""
+    try:
+        return [CourierGeocodeSearchResult(**item) for item in search_geocode_address(q, limit)]
+    except Exception as exc:
+        logger.warning("geocode_search_failed q=%s error=%s", q, exc)
+        raise HTTPException(status_code=502, detail="No se pudo buscar la direccion.") from exc

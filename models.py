@@ -199,6 +199,17 @@ class CourierReverseGeocodeResponse(BaseModel):
     country: Optional[str] = None
     display_name: Optional[str] = None
 
+class CourierGeocodeSearchResult(BaseModel):
+    label: str
+    lat: float
+    lng: float
+    line1: Optional[str] = None
+    district: Optional[str] = None
+    city: Optional[str] = None
+    region: Optional[str] = None
+    country: Optional[str] = None
+    display_name: Optional[str] = None
+
 # ============ COURIER ORDERS ============
 class CourierOrderDeliveryAddress(BaseModel):
     line1: str = Field(..., min_length=1)

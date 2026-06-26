@@ -379,26 +379,7 @@ def calculate_included_igv(taxable_total: float) -> dict[str, float]:
     return {"taxable_base": taxable_base, "igv_amount": igv_amount, "igv_rate": rate}
 
 
-def reverse_geocode_point(lat: float, lng: float) -> dict[str, str | None]:
-    """Obtiene direccion referencial para un punto usando Nominatim compatible."""
-    response = requests.get(
-        settings.geocoding_api_url,
-        params={
-            "format": "jsonv2",
-            "lat": lat,
-            "lon": lng,
-            "accept-language": "es",
-            "zoom": "18",
-            "addressdetails": "1",
-        },
-        headers={
-            "Accept": "application/json",
-            "User-Agent": settings.geocoding_user_agent,
-        },
-        timeout=max(1.0, float(settings.geocoding_timeout_seconds or 5.0)),
-    )
-    response.raise_for_status()
-    data = response.json()
+def _extract_address_parts(data: dict[str, Any]) -> dict[str, str | None]:
     address = data.get("address") or {}
     road = (
         address.get("road")
@@ -424,6 +405,81 @@ def reverse_geocode_point(lat: float, lng: float) -> dict[str, str | None]:
         "country": address.get("country"),
         "display_name": data.get("display_name"),
     }
+
+
+def reverse_geocode_point(lat: float, lng: float) -> dict[str, str | None]:
+    """Obtiene direccion referencial para un punto usando Nominatim compatible."""
+    response = requests.get(
+        settings.geocoding_api_url,
+        params={
+            "format": "jsonv2",
+            "lat": lat,
+            "lon": lng,
+            "accept-language": "es",
+            "zoom": "18",
+            "addressdetails": "1",
+        },
+        headers={
+            "Accept": "application/json",
+            "User-Agent": settings.geocoding_user_agent,
+        },
+        timeout=max(1.0, float(settings.geocoding_timeout_seconds or 5.0)),
+    )
+    response.raise_for_status()
+    return _extract_address_parts(response.json())
+
+
+def search_geocode_address(query: str, limit: int = 6) -> list[dict[str, Any]]:
+    """Busca direcciones con sesgo a la ciudad de Huancavelica."""
+    normalized = " ".join((query or "").strip().split())
+    if not normalized:
+        return []
+    localized_query = normalized if "huancavelica" in normalized.lower() else f"{normalized}, Huancavelica, Peru"
+    response = requests.get(
+        settings.geocoding_search_api_url,
+        params={
+            "format": "jsonv2",
+            "q": localized_query,
+            "accept-language": "es",
+            "addressdetails": "1",
+            "countrycodes": "pe",
+            "limit": max(1, min(limit, 10)),
+            "viewbox": "-75.05,-12.73,-74.90,-12.86",
+            "bounded": "0",
+        },
+        headers={
+            "Accept": "application/json",
+            "User-Agent": settings.geocoding_user_agent,
+        },
+        timeout=max(1.0, float(settings.geocoding_timeout_seconds or 5.0)),
+    )
+    response.raise_for_status()
+
+    results: list[dict[str, Any]] = []
+    seen: set[tuple[float, float, str]] = set()
+    for item in response.json() or []:
+        try:
+            lat = round(float(item.get("lat")), 7)
+            lng = round(float(item.get("lon")), 7)
+        except (TypeError, ValueError):
+            continue
+
+        parts = _extract_address_parts(item)
+        label = parts.get("line1") or item.get("name") or item.get("display_name") or normalized
+        district = parts.get("district")
+        if district and district not in str(label):
+            label = f"{label} - {district}"
+        key = (lat, lng, str(label))
+        if key in seen:
+            continue
+        seen.add(key)
+        results.append({
+            "label": str(label),
+            "lat": lat,
+            "lng": lng,
+            **parts,
+        })
+    return results
 
 
 def calculate_delivery_fee(distance_km: float, fulfillment_type: str) -> float:

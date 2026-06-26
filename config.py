@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     routing_api_url: str = os.getenv("ROUTING_API_URL", "https://router.project-osrm.org")
     routing_timeout_seconds: float = float(os.getenv("ROUTING_TIMEOUT_SECONDS", "4.0"))
     geocoding_api_url: str = os.getenv("GEOCODING_API_URL", "https://nominatim.openstreetmap.org/reverse")
+    geocoding_search_api_url: str = os.getenv("GEOCODING_SEARCH_API_URL", "https://nominatim.openstreetmap.org/search")
     geocoding_user_agent: str = os.getenv("GEOCODING_USER_AGENT", "ACME-Courier-Huancavelica/1.0")
     geocoding_timeout_seconds: float = float(os.getenv("GEOCODING_TIMEOUT_SECONDS", "5.0"))
     platform_service_fee_rate: float = float(os.getenv("PLATFORM_SERVICE_FEE_RATE", "0.036"))
