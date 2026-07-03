@@ -1,33 +1,231 @@
 {
   "city": "Huancavelica",
-  "coverage_area_km2": 10,
+  "coverage_area_km2": 22,
   "coverage": {
     "label": "Cobertura de atencion Huancavelica",
-    "source": "Limites operativos enviados por Max el 2026-07-01",
+    "source": "Mapa sin nombre (5).kml - puntos limite Punto 5 a Punto 41",
     "points": [
       {
-        "code": "YANANACO",
-        "label": "Yananaco (Chunuranra)",
-        "lat": -12.7696855,
-        "lng": -74.9930903
+        "code": "PUNTO_5",
+        "label": "Punto 5",
+        "lat": -12.7800974,
+        "lng": -75.0372666
       },
       {
-        "code": "ASCENSION_HOSPITAL",
-        "label": "Ascension (Hospital)",
-        "lat": -12.7821394,
-        "lng": -74.9798446
+        "code": "PUNTO_6",
+        "label": "Punto 6",
+        "lat": -12.7730799,
+        "lng": -75.0300459
       },
       {
-        "code": "HUAYLACUCHO",
-        "label": "Huaylacucho",
-        "lat": -12.8112803,
-        "lng": -75.0197959
+        "code": "PUNTO_7",
+        "label": "Punto 7",
+        "lat": -12.76676,
+        "lng": -75.0227074
       },
       {
-        "code": "SANTA_ROSA",
-        "label": "Santa Rosa",
-        "lat": -12.7838833,
-        "lng": -75.0029296
+        "code": "PUNTO_8",
+        "label": "Punto 8",
+        "lat": -12.7636211,
+        "lng": -75.0114636
+      },
+      {
+        "code": "PUNTO_9",
+        "label": "Punto 9",
+        "lat": -12.7629497,
+        "lng": -74.992224
+      },
+      {
+        "code": "PUNTO_10",
+        "label": "Punto 10",
+        "lat": -12.7748462,
+        "lng": -74.986897
+      },
+      {
+        "code": "PUNTO_11",
+        "label": "Punto 11",
+        "lat": -12.778864,
+        "lng": -74.9765115
+      },
+      {
+        "code": "PUNTO_12",
+        "label": "Punto 12",
+        "lat": -12.774361,
+        "lng": -74.9657448
+      },
+      {
+        "code": "PUNTO_13",
+        "label": "Punto 13",
+        "lat": -12.764023,
+        "lng": -74.9623545
+      },
+      {
+        "code": "PUNTO_14",
+        "label": "Punto 14",
+        "lat": -12.7699248,
+        "lng": -74.9588354
+      },
+      {
+        "code": "PUNTO_15",
+        "label": "Punto 15",
+        "lat": -12.7742357,
+        "lng": -74.9578484
+      },
+      {
+        "code": "PUNTO_16",
+        "label": "Punto 16",
+        "lat": -12.7788814,
+        "lng": -74.9484499
+      },
+      {
+        "code": "PUNTO_17",
+        "label": "Punto 17",
+        "lat": -12.7780443,
+        "lng": -74.9401673
+      },
+      {
+        "code": "PUNTO_18",
+        "label": "Punto 18",
+        "lat": -12.771306,
+        "lng": -74.9319704
+      },
+      {
+        "code": "PUNTO_19",
+        "label": "Punto 19",
+        "lat": -12.7733568,
+        "lng": -74.9295243
+      },
+      {
+        "code": "PUNTO_20",
+        "label": "Punto 20",
+        "lat": -12.7877748,
+        "lng": -74.9404677
+      },
+      {
+        "code": "PUNTO_21",
+        "label": "Punto 21",
+        "lat": -12.7978141,
+        "lng": -74.9413395
+      },
+      {
+        "code": "PUNTO_22",
+        "label": "Punto 22",
+        "lat": -12.7985229,
+        "lng": -74.9449901
+      },
+      {
+        "code": "PUNTO_23",
+        "label": "Punto 23",
+        "lat": -12.7871119,
+        "lng": -74.9553437
+      },
+      {
+        "code": "PUNTO_24",
+        "label": "Punto 24",
+        "lat": -12.7916459,
+        "lng": -74.9641773
+      },
+      {
+        "code": "PUNTO_25",
+        "label": "Punto 25",
+        "lat": -12.7920597,
+        "lng": -74.971565
+      },
+      {
+        "code": "PUNTO_26",
+        "label": "Punto 26",
+        "lat": -12.7934826,
+        "lng": -74.9789679
+      },
+      {
+        "code": "PUNTO_27",
+        "label": "Punto 27",
+        "lat": -12.7960145,
+        "lng": -74.984504
+      },
+      {
+        "code": "PUNTO_28",
+        "label": "Punto 28",
+        "lat": -12.7922419,
+        "lng": -74.9855645
+      },
+      {
+        "code": "PUNTO_29",
+        "label": "Punto 29",
+        "lat": -12.7905888,
+        "lng": -74.9805648
+      },
+      {
+        "code": "PUNTO_30",
+        "label": "Punto 30",
+        "lat": -12.7877011,
+        "lng": -74.9885471
+      },
+      {
+        "code": "PUNTO_31",
+        "label": "Punto 31",
+        "lat": -12.7910493,
+        "lng": -74.9889333
+      },
+      {
+        "code": "PUNTO_32",
+        "label": "Punto 32",
+        "lat": -12.7896473,
+        "lng": -74.9970873
+      },
+      {
+        "code": "PUNTO_33",
+        "label": "Punto 33",
+        "lat": -12.788626,
+        "lng": -75.0077407
+      },
+      {
+        "code": "PUNTO_34",
+        "label": "Punto 34",
+        "lat": -12.7805905,
+        "lng": -75.0069682
+      },
+      {
+        "code": "PUNTO_35",
+        "label": "Punto 35",
+        "lat": -12.7795023,
+        "lng": -75.0187271
+      },
+      {
+        "code": "PUNTO_36",
+        "label": "Punto 36",
+        "lat": -12.7828087,
+        "lng": -75.0266664
+      },
+      {
+        "code": "PUNTO_37",
+        "label": "Punto 37",
+        "lat": -12.7885423,
+        "lng": -75.0318162
+      },
+      {
+        "code": "PUNTO_38",
+        "label": "Punto 38",
+        "lat": -12.7917648,
+        "lng": -75.0347345
+      },
+      {
+        "code": "PUNTO_39",
+        "label": "Punto 39",
+        "lat": -12.7942339,
+        "lng": -75.0357215
+      },
+      {
+        "code": "PUNTO_40",
+        "label": "Punto 40",
+        "lat": -12.7920577,
+        "lng": -75.0412147
+      },
+      {
+        "code": "PUNTO_41",
+        "label": "Punto 41",
+        "lat": -12.7855709,
+        "lng": -75.0389402
       }
     ]
   },

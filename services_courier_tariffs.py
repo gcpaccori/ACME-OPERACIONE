@@ -105,7 +105,8 @@ def detect_huancavelica_coverage(
     config = load_tariff_config()
     coverage = config.get("coverage") or {}
     coverage_label = str(coverage.get("label") or "Cobertura urbana ACME")
-    point_names = ", ".join(point["label"] for point in _coverage_points(config))
+    point_count = len(_coverage_points(config))
+    source = str(coverage.get("source") or "poligono operativo")
 
     if fulfillment_type == "pickup":
         return {
@@ -128,14 +129,14 @@ def detect_huancavelica_coverage(
         return {
             "status": "inside",
             "label": "Dentro de cobertura urbana",
-            "detail": f"Destino dentro de {coverage_label}: {point_names}.",
+            "detail": f"Destino dentro de {coverage_label}, definido por {point_count} puntos limite del KML.",
             "is_out_of_city": False,
         }
 
     return {
         "status": "outside",
         "label": "Fuera de cobertura urbana",
-        "detail": f"Destino fuera de {coverage_label}; se cotiza con Zona D por kilometraje.",
+        "detail": f"Destino fuera de {coverage_label} ({source}); se cotiza con Zona D por kilometraje.",
         "is_out_of_city": True,
     }
 
