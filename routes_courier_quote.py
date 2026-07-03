@@ -17,7 +17,7 @@ from services_courier_quote import (
     reverse_geocode_point,
     search_geocode_address,
 )
-from services_courier_tariffs import calculate_courier_tariff
+from services_courier_tariffs import calculate_courier_tariff, detect_huancavelica_coverage
 from services_supabase_auth import SupabaseAuthError, verify_supabase_user
 
 router = APIRouter(prefix="/api/courier", tags=["courier-quote"])
@@ -94,7 +94,20 @@ def create_courier_quote(
                 )
             distance_km = _FALLBACK_DISTANCE_KM
 
-        # 3. Calcular tarifa courier por zonas urbanas de Huancavelica
+        # 3. Detectar cobertura operativa urbana de Huancavelica
+        coverage = detect_huancavelica_coverage(client_lat, client_lng, payload.fulfillment_type)
+        manual_out_of_city = payload.is_out_of_city or (payload.zone or "").strip().upper() == "D"
+        effective_is_out_of_city = bool(manual_out_of_city or coverage.get("is_out_of_city"))
+        if manual_out_of_city and coverage.get("status") != "outside":
+            coverage = {
+                **coverage,
+                "status": "outside",
+                "label": "Marcado fuera de cobertura urbana",
+                "detail": "El pedido fue marcado para tarifa fuera de ciudad; se cotiza con Zona D por kilometraje.",
+                "is_out_of_city": True,
+            }
+
+        # 4. Calcular tarifa courier por zonas urbanas de Huancavelica
         zone_overrides = supabase.get_delivery_zone_overrides(payload.branch_id, token)
         tariff = calculate_courier_tariff(
             distance_km=distance_km,
@@ -102,20 +115,20 @@ def create_courier_quote(
             weight_kg=payload.weight_kg,
             service_type=payload.service_type,
             is_difficult_zone=payload.is_difficult_zone,
-            is_out_of_city=payload.is_out_of_city,
+            is_out_of_city=effective_is_out_of_city,
             wait_or_second_visit=payload.wait_or_second_visit,
             fulfillment_type=payload.fulfillment_type,
             zone_overrides=zone_overrides,
         )
         delivery_fee = float(tariff["tarifa_final"])
 
-        # 4. Obtener precios reales de productos desde Supabase
+        # 5. Obtener precios reales de productos desde Supabase
         all_product_ids = list({item.product_id for item in payload.items})
         products_rows = supabase.get_products_with_prices(all_product_ids, token)
         price_map: dict[str, float] = {str(row["id"]): float(row["base_price"]) for row in products_rows}
         name_map: dict[str, str] = {str(row["id"]): str(row.get("name", "")) for row in products_rows}
 
-        # 5. Obtener deltas de modificadores
+        # 6. Obtener deltas de modificadores
         all_modifier_ids: list[str] = []
         for item in payload.items:
             all_modifier_ids.extend(item.modifier_ids)
@@ -126,7 +139,7 @@ def create_courier_quote(
             mod_rows = supabase.get_modifiers_prices(all_modifier_ids, token)
             modifier_map = {str(row["id"]): float(row.get("price_delta", 0)) for row in mod_rows}
 
-        # 6. Calcular subtotal
+        # 7. Calcular subtotal
         subtotal = 0.0
         items_snapshot: list[dict[str, Any]] = []
         for item in payload.items:
@@ -152,30 +165,30 @@ def create_courier_quote(
 
         subtotal = round(subtotal, 2)
 
-        # 7. Descuento (por ahora siempre 0)
+        # 8. Descuento (por ahora siempre 0)
         discount = 0.0
 
-        # 8. Base para tarifa de servicio
+        # 9. Base para tarifa de servicio
         base = subtotal - discount
 
-        # 9. Tarifa de servicio ACME
+        # 10. Tarifa de servicio ACME
         service_fee = calculate_service_fee(base)
         service_fee_rate = float(settings.platform_service_fee_rate or 0.036)
 
-        # 10. Tip
+        # 11. Tip
         tip_amount = round(float(payload.tip_amount), 2)
 
-        # 11. IGV incluido y comision Culqi
+        # 12. IGV incluido y comision Culqi
         taxable_total = round(base + service_fee + delivery_fee, 2)
         tax_breakdown = calculate_included_igv(taxable_total)
         payment_base = round(taxable_total + tip_amount, 2)
         processing = calculate_payment_processing_fee(payment_base)
         payment_processing_fee = float(processing["fee"])
 
-        # 12. Total
+        # 13. Total
         total = round(payment_base + payment_processing_fee, 2)
 
-        # 13. Guardar cotizacion
+        # 14. Guardar cotizacion
         quote = supabase.save_quote(
             customer_id=customer_id,
             branch_id=payload.branch_id,
@@ -226,6 +239,10 @@ def create_courier_quote(
             payment_processing_tax_amount=float(processing["tax_amount"]),
             total=total,
             distance_km=distance_km,
+            coverage_status=str(coverage.get("status") or "unknown"),
+            coverage_label=str(coverage.get("label") or ""),
+            coverage_detail=str(coverage.get("detail") or ""),
+            is_out_of_city=effective_is_out_of_city,
             delivery_zone=str(tariff.get("zona_codigo") or ""),
             delivery_zone_label=str(tariff.get("zona_aplicada") or ""),
             delivery_detail=str(tariff.get("detalle_calculo") or ""),

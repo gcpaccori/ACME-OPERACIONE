@@ -1,6 +1,36 @@
 {
   "city": "Huancavelica",
   "coverage_area_km2": 10,
+  "coverage": {
+    "label": "Cobertura de atencion Huancavelica",
+    "source": "Limites operativos enviados por Max el 2026-07-01",
+    "points": [
+      {
+        "code": "YANANACO",
+        "label": "Yananaco (Chunuranra)",
+        "lat": -12.7696855,
+        "lng": -74.9930903
+      },
+      {
+        "code": "ASCENSION_HOSPITAL",
+        "label": "Ascension (Hospital)",
+        "lat": -12.7821394,
+        "lng": -74.9798446
+      },
+      {
+        "code": "HUAYLACUCHO",
+        "label": "Huaylacucho",
+        "lat": -12.8112803,
+        "lng": -75.0197959
+      },
+      {
+        "code": "SANTA_ROSA",
+        "label": "Santa Rosa",
+        "lat": -12.7838833,
+        "lng": -75.0029296
+      }
+    ]
+  },
   "rounding_increment": 0.5,
   "rounding_mode": "nearest",
   "service_surcharges": {

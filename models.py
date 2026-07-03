@@ -184,6 +184,10 @@ class CourierQuoteResponse(BaseModel):
     payment_processing_tax_amount: float = 0.0
     total: float
     distance_km: Optional[float] = None
+    coverage_status: str = "unknown"
+    coverage_label: Optional[str] = None
+    coverage_detail: Optional[str] = None
+    is_out_of_city: bool = False
     delivery_zone: Optional[str] = None
     delivery_zone_label: Optional[str] = None
     delivery_detail: Optional[str] = None

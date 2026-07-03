@@ -36,6 +36,110 @@ def load_tariff_config() -> dict[str, Any]:
         return json.load(fh)
 
 
+def _coverage_points(config: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    cfg = config or load_tariff_config()
+    coverage = cfg.get("coverage") or {}
+    raw_points = coverage.get("points") or []
+    points: list[dict[str, Any]] = []
+    for raw in raw_points:
+        if not isinstance(raw, dict):
+            continue
+        lat = _number(raw.get("lat"), math.nan)
+        lng = _number(raw.get("lng"), math.nan)
+        if not math.isfinite(lat) or not math.isfinite(lng):
+            continue
+        points.append({
+            "code": str(raw.get("code") or ""),
+            "label": str(raw.get("label") or raw.get("code") or "Punto de cobertura"),
+            "lat": lat,
+            "lng": lng,
+        })
+    return points
+
+
+def _point_on_segment(px: float, py: float, ax: float, ay: float, bx: float, by: float) -> bool:
+    cross = (py - ay) * (bx - ax) - (px - ax) * (by - ay)
+    if abs(cross) > 1e-10:
+        return False
+    dot = (px - ax) * (bx - ax) + (py - ay) * (by - ay)
+    if dot < 0:
+        return False
+    squared_len = (bx - ax) ** 2 + (by - ay) ** 2
+    return dot <= squared_len + 1e-10
+
+
+def point_in_coverage_polygon(lat: float | None, lng: float | None, config: dict[str, Any] | None = None) -> bool | None:
+    if lat is None or lng is None:
+        return None
+    points = _coverage_points(config)
+    if len(points) < 3:
+        return None
+
+    x = float(lng)
+    y = float(lat)
+    inside = False
+    previous = points[-1]
+    for current in points:
+        xi = float(current["lng"])
+        yi = float(current["lat"])
+        xj = float(previous["lng"])
+        yj = float(previous["lat"])
+
+        if _point_on_segment(x, y, xi, yi, xj, yj):
+            return True
+
+        intersects = (yi > y) != (yj > y)
+        if intersects:
+            x_intersection = (xj - xi) * (y - yi) / (yj - yi) + xi
+            if x < x_intersection:
+                inside = not inside
+        previous = current
+    return inside
+
+
+def detect_huancavelica_coverage(
+    lat: float | None,
+    lng: float | None,
+    fulfillment_type: str = "delivery",
+) -> dict[str, Any]:
+    config = load_tariff_config()
+    coverage = config.get("coverage") or {}
+    coverage_label = str(coverage.get("label") or "Cobertura urbana ACME")
+    point_names = ", ".join(point["label"] for point in _coverage_points(config))
+
+    if fulfillment_type == "pickup":
+        return {
+            "status": "pickup",
+            "label": "Recojo en tienda",
+            "detail": "No aplica cobertura de delivery.",
+            "is_out_of_city": False,
+        }
+
+    inside = point_in_coverage_polygon(lat, lng, config)
+    if inside is None:
+        return {
+            "status": "unknown",
+            "label": "Cobertura por confirmar",
+            "detail": "No se recibieron coordenadas suficientes para validar la cobertura urbana.",
+            "is_out_of_city": False,
+        }
+
+    if inside:
+        return {
+            "status": "inside",
+            "label": "Dentro de cobertura urbana",
+            "detail": f"Destino dentro de {coverage_label}: {point_names}.",
+            "is_out_of_city": False,
+        }
+
+    return {
+        "status": "outside",
+        "label": "Fuera de cobertura urbana",
+        "detail": f"Destino fuera de {coverage_label}; se cotiza con Zona D por kilometraje.",
+        "is_out_of_city": True,
+    }
+
+
 def extract_zone_code(value: str | None) -> str | None:
     normalized = (value or "").strip().upper()
     if normalized in {"A", "B", "C", "D"}:
