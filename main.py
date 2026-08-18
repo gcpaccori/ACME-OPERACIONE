@@ -17,11 +17,21 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
+# Dominios propios de produccion. Van en el codigo, y no solo en la variable
+# FRONTEND_URLS, para que un despliegue sin esa variable no deje el checkout
+# fuera por CORS.
+PRODUCTION_ORIGINS = [
+    "https://acmepedidos.com",
+    "https://www.acmepedidos.com",
+]
+
+
 def allowed_origins() -> list[str]:
     origins = [
         settings.frontend_url,
         "http://localhost:3000",
         "http://localhost:5173",
+        *PRODUCTION_ORIGINS,
     ]
     origins.extend(origin.strip() for origin in settings.frontend_urls.split(",") if origin.strip())
     return list(dict.fromkeys(origin for origin in origins if origin))
@@ -37,7 +47,9 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins(),
-    allow_origin_regex=r"https://.*\.vercel\.app",
+    # Previews de Vercel y cualquier subdominio propio. Anclado a proposito:
+    # con allow_credentials=True un patron abierto dejaria entrar a cualquiera.
+    allow_origin_regex=r"https://([a-z0-9-]+\.)*(vercel\.app|acmepedidos\.com)$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
