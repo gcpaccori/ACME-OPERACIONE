@@ -144,7 +144,12 @@ class CulqiService:
                 "phone_number": CULQI_SANDBOX_YAPE_PHONE if self._is_sandbox() else _normalize_phone(telefono),
             },
             "expiration_date": int((datetime.utcnow() + timedelta(hours=24)).timestamp()),
-            "confirm": True,
+            # La orden debe nacer en estado "created" para que el Checkout
+            # multipago pueda confirmarla despues. Con confirm=True nacia en
+            # "pending" y Culqi rechazaba POST /v2/orders/confirm con
+            # "Esta orden no puede ser confirmada porque se encuentra en un
+            # estado diferente de creacion", asi que ningun pago se completaba.
+            "confirm": False,
             "metadata": {
                 "pedido_id": str(pedido_id),
                 "sistema": "ACME",
