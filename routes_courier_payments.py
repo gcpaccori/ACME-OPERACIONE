@@ -55,6 +55,37 @@ def needs_profile_for_charge(payload: CourierPaymentChargeRequest) -> bool:
     return not (payload.email_cliente and payload.nombre_cliente)
 
 
+def orden_culqi_reutilizable(consulta: dict, monto_centimos: int) -> bool:
+    """
+    Decide si una orden Culqi anterior sigue sirviendo para cobrar este pedido.
+
+    Solo se reutiliza si sigue sin pagar ("created"), es por el mismo monto y
+    aun no vence. Ante cualquier duda se devuelve False y se crea una nueva:
+    equivocarse hacia crear de mas solo deja una orden huerfana, mientras que
+    reutilizar una que no corresponde cobraria un monto que no es.
+    """
+    if not consulta.get("exito"):
+        return False
+    if str(consulta.get("estado") or "").strip().lower() != "created":
+        return False
+    try:
+        if int(consulta.get("monto_centimos") or 0) != int(monto_centimos):
+            return False
+    except (TypeError, ValueError):
+        return False
+
+    expira = consulta.get("expiration_date")
+    if expira is not None:
+        try:
+            # Margen de 2 minutos: una orden a punto de vencer no le sirve a
+            # nadie que este por abrir el checkout.
+            if int(expira) <= int(time.time()) + 120:
+                return False
+        except (TypeError, ValueError):
+            return False
+    return True
+
+
 def run_parallel(*jobs) -> None:
     if not jobs:
         return
@@ -92,17 +123,45 @@ def create_courier_payment_order(
             raise HTTPException(status_code=400, detail="El monto del pedido excede el limite permitido por Culqi.")
 
         description = payload.descripcion or f"Pedido ACME Courier #{order.get('order_code') or order['id']}"
-        result = culqi_service.crear_orden_checkout(
-            pedido_id=f"courier-{order['id']}",
-            monto=amount,
-            email=email,
-            nombre=name,
-            telefono=payload.telefono_cliente or phone,
-            descripcion=description,
-        )
-        if not result.get("exito"):
-            status_code = 400 if result.get("error_tipo") in ("validation", "parameter_error") else 502
-            raise HTTPException(status_code=status_code, detail=result.get("mensaje", "No se pudo crear orden Culqi."))
+
+        # Este endpoint se llama cada vez que el cliente pulsa "Pagar", y antes
+        # creaba una orden Culqi nueva en cada llamada pisando la anterior. Con
+        # tarjeta daba igual, pero en el flujo asincrono no: quedaban dos
+        # ordenes vivas y pagables sobre el mismo pedido, y si el cliente pagaba
+        # las dos por Yape se le cobraba dos veces. Por eso reutilizamos la
+        # orden anterior mientras siga sirviendo.
+        existing = supabase.find_pending_payment(str(order["id"]), token)
+        existing_reference = str((existing or {}).get("external_reference") or "").strip()
+        reused = False
+
+        if existing_reference:
+            consulta = culqi_service.obtener_orden(existing_reference)
+            if orden_culqi_reutilizable(consulta, amount):
+                reused = True
+                result = {
+                    "exito": True,
+                    "order_id": existing_reference,
+                    "monto_centimos": consulta.get("monto_centimos", amount),
+                    "mensaje": "Orden Culqi vigente reutilizada",
+                }
+                logger.info(
+                    "courier_payment_order_reused order_id=%s culqi_order=%s",
+                    order["id"],
+                    existing_reference,
+                )
+
+        if not reused:
+            result = culqi_service.crear_orden_checkout(
+                pedido_id=f"courier-{order['id']}",
+                monto=amount,
+                email=email,
+                nombre=name,
+                telefono=payload.telefono_cliente or phone,
+                descripcion=description,
+            )
+            if not result.get("exito"):
+                status_code = 400 if result.get("error_tipo") in ("validation", "parameter_error") else 502
+                raise HTTPException(status_code=status_code, detail=result.get("mensaje", "No se pudo crear orden Culqi."))
 
         payment_method_id = supabase.get_online_payment_method_id(token)
         payment_id = supabase.upsert_pending_payment(
@@ -111,25 +170,37 @@ def create_courier_payment_order(
             external_reference=result["order_id"],
             bearer_token=token,
         )
-        run_parallel(
+        jobs = [
             lambda: supabase.update_order_payment(
                 str(order["id"]),
                 payment_method_id=payment_method_id,
                 payment_status="pending",
                 bearer_token=token,
-            ),
-            lambda: supabase.insert_transaction(
-                payment_id=payment_id,
-                transaction_type="authorization",
-                amount=float(order.get("total") or 0),
-                status="pending",
-                provider_transaction_id=result["order_id"],
-                request_json={"order_id": str(order["id"]), "amount": amount, "currency": "PEN"},
-                response_json=result.get("respuesta_completa"),
-                bearer_token=token,
-            ),
+            )
+        ]
+        # La transaccion de autorizacion se registra solo cuando la orden es
+        # nueva. Al reutilizar no hay nada nuevo que registrar, y anotarlo otra
+        # vez llenaria el historial de un intento por cada clic.
+        if not reused:
+            jobs.append(
+                lambda: supabase.insert_transaction(
+                    payment_id=payment_id,
+                    transaction_type="authorization",
+                    amount=float(order.get("total") or 0),
+                    status="pending",
+                    provider_transaction_id=result["order_id"],
+                    request_json={"order_id": str(order["id"]), "amount": amount, "currency": "PEN"},
+                    response_json=result.get("respuesta_completa"),
+                    bearer_token=token,
+                )
+            )
+        run_parallel(*jobs)
+        logger.info(
+            "courier_payment_order_ok order_id=%s reused=%s elapsed_ms=%s",
+            order["id"],
+            reused,
+            int((time.perf_counter() - started_at) * 1000),
         )
-        logger.info("courier_payment_order_ok order_id=%s elapsed_ms=%s", order["id"], int((time.perf_counter() - started_at) * 1000))
 
         return CourierPaymentOrderResponse(
             order_id=result["order_id"],

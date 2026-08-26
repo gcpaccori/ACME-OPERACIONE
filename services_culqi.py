@@ -196,7 +196,44 @@ class CulqiService:
                 "mensaje": f"Error creando orden Culqi: {str(e)}",
                 "respuesta_completa": None,
             }
-    
+
+    def obtener_orden(self, order_id: str) -> Dict[str, Any]:
+        """
+        Consulta una orden Culqi ya creada.
+
+        Se usa para saber si una orden anterior sigue sirviendo antes de crear
+        otra: dos ordenes vivas a la vez sobre el mismo pedido permitirian que
+        el cliente pague las dos por Yape y se le cobre dos veces.
+        """
+        try:
+            result = self._request("GET", f"/orders/{order_id}")
+            data = result.get("data", {})
+            status = result.get("status")
+
+            if status != 200 or not data.get("id"):
+                return {
+                    "exito": False,
+                    "mensaje": _culqi_error_message(data),
+                    "respuesta_completa": data,
+                    "culqi_status": status,
+                }
+
+            return {
+                "exito": True,
+                "order_id": data["id"],
+                "estado": data.get("state"),
+                "monto_centimos": data.get("amount"),
+                "expiration_date": data.get("expiration_date"),
+                "respuesta_completa": data,
+            }
+        except Exception as e:
+            logger.error("Error consultando orden Culqi %s: %s", order_id, e, exc_info=True)
+            return {
+                "exito": False,
+                "mensaje": f"Error consultando orden Culqi: {str(e)}",
+                "respuesta_completa": None,
+            }
+
     def procesar_pago(
         self,
         token: str,
