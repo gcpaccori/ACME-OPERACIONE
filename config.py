@@ -35,8 +35,15 @@ class Settings(BaseSettings):
     culqi_online_fixed_usd: float = float(os.getenv("CULQI_ONLINE_FIXED_USD", "0.20"))
     culqi_exchange_rate: float = float(os.getenv("CULQI_EXCHANGE_RATE", "3.85"))
     culqi_min_fee_pen: float = float(os.getenv("CULQI_MIN_FEE_PEN", "3.50"))
-    culqi_min_threshold_pen: float = float(os.getenv("CULQI_MIN_THRESHOLD_PEN", "87.72"))
-    pass_culqi_fee_to_customer: bool = os.getenv("PASS_CULQI_FEE_TO_CUSTOMER", "True").lower() == "true"
+    # Monto a partir del cual la comision por tasa supera al minimo. Se deja en
+    # 0 para que se calcule sola a partir de la tasa, el fijo y el minimo: el
+    # valor que estaba escrito a mano (87.72) no cuadraba con ninguno de los
+    # dos y producia un salto en la comision justo en ese punto.
+    culqi_min_threshold_pen: float = float(os.getenv("CULQI_MIN_THRESHOLD_PEN", "0"))
+    # La comision de Culqi es un costo del negocio, no del cliente: el cliente
+    # ya paga la tarifa de servicio del 3.6%. Cobrarle ademas la pasarela es
+    # cobrarle dos veces por lo mismo.
+    pass_culqi_fee_to_customer: bool = os.getenv("PASS_CULQI_FEE_TO_CUSTOMER", "False").lower() == "true"
 
     @field_validator("debug", "skip_legacy_db_init", mode="before")
     @classmethod

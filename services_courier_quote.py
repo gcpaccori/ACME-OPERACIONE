@@ -349,7 +349,13 @@ def calculate_payment_processing_fee(amount: float) -> dict[str, Any]:
     rate = max(0.0, float(settings.culqi_online_rate or 0.0))
     fixed_pen = round(max(0.0, float(settings.culqi_online_fixed_usd or 0.0)) * max(0.0, float(settings.culqi_exchange_rate or 0.0)), 2)
     min_fee = max(0.0, float(settings.culqi_min_fee_pen or 0.0))
+
+    # El umbral es el monto donde la comision por tasa alcanza al minimo. Si no
+    # se fuerza por variable de entorno se deduce, para que las dos ramas de
+    # abajo se junten sin salto y no haya un tercer numero que mantener.
     threshold = max(0.0, float(settings.culqi_min_threshold_pen or 0.0))
+    if threshold <= 0 and rate > 0:
+        threshold = max(0.0, (min_fee - fixed_pen) / rate)
 
     if amount < threshold:
         fee = max(min_fee, round(amount * rate + fixed_pen, 2))
