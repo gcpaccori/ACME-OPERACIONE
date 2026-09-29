@@ -16,6 +16,11 @@ class SupabaseOrderError(Exception):
     pass
 
 
+# El pedido se paga antes de despacharse: nace esperando pago y el backend lo
+# pasa a "placed" recien cuando el pago se confirma (ver release_paid_order).
+AWAITING_PAYMENT_STATUS = "pending_payment"
+
+
 class SupabaseOrderService:
     """Persistencia de pedidos courier sobre tablas Supabase."""
 
@@ -157,7 +162,7 @@ class SupabaseOrderService:
             "customer_id": customer_id,
             "merchant_id": merchant_id,
             "branch_id": branch_id,
-            "status": "placed",
+            "status": AWAITING_PAYMENT_STATUS,
             "payment_status": "pending",
             "subtotal": float(quote.get("subtotal", 0) or 0),
             "products_total": float(quote.get("subtotal", 0) or 0),
@@ -197,27 +202,41 @@ class SupabaseOrderService:
             "payment_processing_note",
             "payment_processing_tax_amount",
         }
+        def insert_order(payload: dict[str, Any]) -> Any:
+            try:
+                return self._request(
+                    "POST",
+                    "orders",
+                    bearer_token=bearer_token,
+                    json=payload,
+                    prefer="return=representation",
+                )
+            except SupabaseOrderError as exc:
+                detail = str(exc).lower()
+                if "schema cache" not in detail and "column" not in detail:
+                    raise
+                legacy_payload = {key: value for key, value in payload.items() if key not in optional_order_columns}
+                return self._request(
+                    "POST",
+                    "orders",
+                    bearer_token=bearer_token,
+                    json=legacy_payload,
+                    prefer="return=representation",
+                )
+
         try:
-            order_rows = self._request(
-                "POST",
-                "orders",
-                bearer_token=bearer_token,
-                json=order_payload,
-                prefer="return=representation",
-            )
+            order_rows = insert_order(order_payload)
         except SupabaseOrderError as exc:
             detail = str(exc).lower()
-            if "schema cache" not in detail and "column" not in detail:
+            if "invalid input value for enum" not in detail or AWAITING_PAYMENT_STATUS not in detail:
                 raise
-            legacy_payload = {key: value for key, value in order_payload.items() if key not in optional_order_columns}
-            order_rows = self._request(
-                "POST",
-                "orders",
-                bearer_token=bearer_token,
-                json=legacy_payload,
-                prefer="return=representation",
-            )
+            # Base sin el estado pending_payment: el pedido queda "placed" con
+            # payment_status pendiente y operaciones lo retiene hasta que se pague.
+            logger.warning("order_status no tiene '%s'; el pedido se crea como 'placed'.", AWAITING_PAYMENT_STATUS)
+            order_payload["status"] = "placed"
+            order_rows = insert_order(order_payload)
         created_order = order_rows[0] if order_rows else order_payload
+        initial_status = str(created_order.get("status") or order_payload["status"])
 
         items_payload: list[dict[str, Any]] = []
         for item in quote.get("items_snapshot") or []:
@@ -274,11 +293,11 @@ class SupabaseOrderService:
         history_payload = {
             "id": str(uuid4()),
             "order_id": order_id,
-            "from_status": "placed",
-            "to_status": "placed",
+            "from_status": initial_status,
+            "to_status": initial_status,
             "actor_user_id": customer_id,
             "actor_type": "customer",
-            "note": f"Pedido creado desde cotizacion {quote.get('id')}",
+            "note": f"Pedido creado desde cotizacion {quote.get('id')}, esperando pago",
             "created_at": now,
         }
         self._request(

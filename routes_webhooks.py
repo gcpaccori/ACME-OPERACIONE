@@ -8,6 +8,7 @@ import requests
 from fastapi import APIRouter, Request
 
 from config import settings
+from services_courier_payments import SupabaseCourierPayments
 
 router = APIRouter(prefix="/api/webhooks", tags=["webhooks"])
 logger = logging.getLogger(__name__)
@@ -177,6 +178,9 @@ async def culqi_webhook(request: Request):
                     "culqi_webhook: orden %s ya tiene payment_status='%s', idempotente.",
                     order_id, new_status,
                 )
+                if new_status == "paid":
+                    # Por si el cobro marco el pago pero no alcanzo a liberar el pedido.
+                    SupabaseCourierPayments().release_paid_order(order_id)
                 return {"received": True}
 
         # Actualizar orders.payment_status
@@ -204,6 +208,10 @@ async def culqi_webhook(request: Request):
                 {"id": f"eq.{payment_id}"},
                 payment_update,
             )
+
+        if new_status == "paid":
+            # Pago confirmado (Yape, PagoEfectivo...): recien ahora el pedido entra a operaciones.
+            SupabaseCourierPayments().release_paid_order(order_id)
 
         logger.info(
             "culqi_webhook_processed type=%s order_id=%s new_status=%s",
