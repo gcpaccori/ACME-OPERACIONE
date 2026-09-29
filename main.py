@@ -1,10 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from config import settings
-from database import init_db
-import routes_products
-import routes_orders
-import routes_payments
 import routes_courier_payments
 import routes_courier_quote
 import routes_courier_orders
@@ -29,7 +25,7 @@ def allowed_origins() -> list[str]:
 # Crear aplicación FastAPI
 app = FastAPI(
     title="ACME Courier Payments API",
-    description="API para pagos Culqi del flujo courier y endpoints de prueba heredados",
+    description="API de pedidos y pagos Culqi del courier ACME",
     version="1.0.0"
 )
 
@@ -44,9 +40,6 @@ app.add_middleware(
 )
 
 # Incluir rutas
-app.include_router(routes_products.router)
-app.include_router(routes_orders.router)
-app.include_router(routes_payments.router)
 app.include_router(routes_courier_payments.router)
 app.include_router(routes_courier_quote.router)
 app.include_router(routes_courier_orders.router)
@@ -68,20 +61,6 @@ def root():
         "docs": "/docs",
         "redoc": "/redoc"
     }
-
-# Inicializar BD al arrancar
-@app.on_event("startup")
-async def startup():
-    """Crear tablas si no existen"""
-    if settings.skip_legacy_db_init:
-        logger.info("Inicializacion de BD legacy omitida por SKIP_LEGACY_DB_INIT")
-        return
-
-    try:
-        init_db()
-        logger.info("✅ Base de datos inicializada correctamente")
-    except Exception as e:
-        logger.error(f"❌ Error inicializando BD: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn

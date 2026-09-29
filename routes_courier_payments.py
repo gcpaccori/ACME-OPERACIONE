@@ -12,6 +12,7 @@ from models import (
 )
 from services_courier_payments import SupabaseCourierError, SupabaseCourierPayments
 from services_culqi import CulqiService
+from services_supabase_auth import SupabaseAuthError, verify_supabase_user
 
 
 router = APIRouter(prefix="/api/courier/payments", tags=["courier-payments"])
@@ -29,6 +30,24 @@ def bearer_token(authorization: str | None) -> str | None:
     if scheme.lower() != "bearer" or not token:
         return None
     return token.strip()
+
+
+def require_order_owner(token: str | None, order: dict) -> None:
+    """
+    Solo el cliente dueno del pedido puede abrir o cobrar su pago.
+
+    El backend lee Supabase con la service role, que se salta RLS, asi que sin
+    esta validacion cualquiera con el id de un pedido podia crearle ordenes
+    Culqi o devolver a "pending" un pedido ya pagado.
+    """
+    if not token:
+        raise HTTPException(status_code=401, detail="Inicia sesion para pagar tu pedido.")
+    try:
+        user_id = verify_supabase_user(token)
+    except SupabaseAuthError as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+    if str(order.get("customer_id") or "") != user_id:
+        raise HTTPException(status_code=403, detail="Este pedido no pertenece a tu cuenta.")
 
 
 def order_amount_centimos(order: dict) -> int:
@@ -115,8 +134,16 @@ def create_courier_payment_order(
     supabase = SupabaseCourierPayments()
     started_at = time.perf_counter()
 
+    if not token:
+        raise HTTPException(status_code=401, detail="Inicia sesion para pagar tu pedido.")
+
     try:
         order = supabase.get_order(payload.order_id, token)
+        require_order_owner(token, order)
+        if order.get("payment_status") == "paid":
+            raise HTTPException(status_code=409, detail="Este pedido ya esta pagado.")
+        if order.get("status") == "cancelled":
+            raise HTTPException(status_code=409, detail="Este pedido fue cancelado.")
         profile = supabase.get_profile(order.get("customer_id"), token) if needs_profile_for_order(payload) else None
         email, name, phone = customer_identity(payload.email_cliente, payload.nombre_cliente, profile)
         amount = order_amount_centimos(order)
@@ -236,8 +263,12 @@ def charge_courier_payment(
     supabase = SupabaseCourierPayments()
     started_at = time.perf_counter()
 
+    if not token:
+        raise HTTPException(status_code=401, detail="Inicia sesion para pagar tu pedido.")
+
     try:
         order = supabase.get_order(payload.order_id, token)
+        require_order_owner(token, order)
         profile = supabase.get_profile(order.get("customer_id"), token) if needs_profile_for_charge(payload) else None
         email, name, _phone = customer_identity(payload.email_cliente, payload.nombre_cliente, profile)
         amount = order_amount_centimos(order)
