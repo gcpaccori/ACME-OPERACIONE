@@ -4,11 +4,15 @@ import logging
 from datetime import datetime, timezone
 from typing import Any
 
+import json
+
 import requests
 from fastapi import APIRouter, Request
+from fastapi.responses import JSONResponse
 
 from config import settings
 from services_courier_payments import SupabaseCourierPayments
+from services_culqi import CulqiService
 
 router = APIRouter(prefix="/api/webhooks", tags=["webhooks"])
 logger = logging.getLogger(__name__)
@@ -64,37 +68,54 @@ def _sb_get(table: str, params: dict[str, str]) -> list[dict[str, Any]]:
     return []
 
 
-# Mapeo de evento Culqi -> payment_status
-_EVENT_STATUS_MAP = {
-    "charge.paid": "paid",
-    "payment.paid": "paid",
-    "charge.failed": "failed",
-    "charge.expired": "expired",
-    "refund.created": "refunded",
-    "charge.refunded": "refunded",
-}
-
-# Mapeo de payment_status -> campo timestamp en payments
+# Estados que el webhook puede fijar. Solo se aceptan despues de consultar a
+# Culqi: el cuerpo del webhook no viene firmado y cualquiera podria enviar un
+# "pagado" falso para que un pedido sin pagar salga a reparto.
 _STATUS_TIMESTAMP_MAP = {
     "paid": "captured_at",
     "failed": "failed_at",
     "expired": "failed_at",
-    "refunded": "captured_at",
+}
+
+_ORDER_EVENTS = {"order.status.changed", "order.paid", "order.expired"}
+_CHARGE_EVENTS = {
+    "charge.paid",
+    "payment.paid",
+    "charge.creation.succeeded",
+    "charge.succeeded",
+    "charge.failed",
+    "charge.creation.failed",
+    "charge.expired",
 }
 
 
-def _find_order_id_from_event(event_object: dict[str, Any]) -> str | None:
-    """Intenta extraer order_id del metadata del evento Culqi."""
-    metadata = event_object.get("metadata") or {}
-    # Culqi puede incluir pedido_id en metadata
-    pedido_id = metadata.get("pedido_id") or metadata.get("order_id")
-    if pedido_id:
-        # Podria ser "courier-<uuid>"
-        raw = str(pedido_id)
-        if raw.startswith("courier-"):
-            raw = raw[len("courier-"):]
-        return raw or None
-    return None
+def _parse_event_object(body: dict[str, Any]) -> dict[str, Any]:
+    """
+    Culqi manda en "data" el objeto (orden o cargo) como texto JSON; algunos
+    envios lo mandan ya como objeto o anidado en data.object. Se aceptan los tres.
+    """
+    data: Any = body.get("data")
+    if isinstance(data, str):
+        try:
+            data = json.loads(data)
+        except ValueError:
+            return {}
+    if not isinstance(data, dict):
+        return {}
+    nested = data.get("object")
+    if isinstance(nested, dict):
+        return nested
+    return data
+
+
+def _order_id_from_metadata(obj: dict[str, Any]) -> str | None:
+    metadata = obj.get("metadata") or {}
+    if not isinstance(metadata, dict):
+        return None
+    raw = str(metadata.get("pedido_id") or metadata.get("order_id") or metadata.get("referencia") or "").strip()
+    if raw.startswith("courier-"):
+        raw = raw[len("courier-"):]
+    return raw or None
 
 
 def _find_order_id_from_payment(external_reference: str | None) -> str | None:
@@ -110,7 +131,7 @@ def _find_order_id_from_payment(external_reference: str | None) -> str | None:
         },
     )
     if rows:
-        return str(rows[0].get("order_id") or "")
+        return str(rows[0].get("order_id") or "") or None
     return None
 
 
@@ -128,86 +149,139 @@ def _get_payment_for_order(order_id: str) -> dict[str, Any] | None:
     return rows[0] if rows else None
 
 
+def _verified_status(event_type: str, obj: dict[str, Any]) -> tuple[str | None, dict[str, Any] | None]:
+    """
+    Consulta a Culqi el objeto del evento y devuelve (estado, objeto verificado).
+    Devuelve (None, None) si no se pudo verificar o no hay nada que aplicar.
+    """
+    object_id = str(obj.get("id") or "").strip()
+    object_kind = str(obj.get("object") or "").strip()
+    if not object_id:
+        return None, None
+
+    culqi = CulqiService()
+    if event_type in _ORDER_EVENTS or object_kind == "order" or object_id.startswith("ord_"):
+        consulta = culqi.obtener_orden(object_id)
+        if consulta.get("culqi_status") in (400, 401, 404):
+            # Culqi no reconoce la orden: evento falso o de otra cuenta.
+            return None, None
+        if not consulta.get("exito"):
+            raise _CulqiUnavailable(consulta.get("mensaje") or "No se pudo consultar la orden en Culqi.")
+        verified = consulta.get("respuesta_completa") or {}
+        state = str(verified.get("state") or "").lower()
+        if state == "paid":
+            return "paid", verified
+        if state == "expired":
+            return "expired", verified
+        return None, verified
+
+    if event_type in _CHARGE_EVENTS or object_kind == "charge" or object_id.startswith("chr_"):
+        consulta = culqi.obtener_transaccion(object_id)
+        verified = consulta.get("respuesta_completa") or {}
+        if verified.get("object") == "error":
+            return None, None
+        if not consulta.get("exito") or verified.get("object") != "charge":
+            raise _CulqiUnavailable(consulta.get("mensaje") or "No se pudo consultar el cargo en Culqi.")
+        outcome = verified.get("outcome") or {}
+        outcome_type = str(outcome.get("type") or "").lower()
+        if outcome_type in ("venta_exitosa", "successful", "success") or verified.get("paid") is True:
+            return "paid", verified
+        if outcome_type:
+            return "failed", verified
+        return None, verified
+
+    return None, None
+
+
+class _CulqiUnavailable(Exception):
+    pass
+
+
 @router.post("/culqi")
 async def culqi_webhook(request: Request):
     """
     Recibe notificaciones de Culqi (webhooks).
-    Actualiza payment_status en orders y payments segun el tipo de evento.
-    Siempre devuelve HTTP 200 para que Culqi no reintente.
+
+    No confia en el cuerpo: vuelve a consultar la orden o el cargo en Culqi con
+    la llave privada y solo aplica el estado que Culqi confirma, y un "pagado"
+    solo si el monto coincide con el total del pedido. Devuelve 200 salvo
+    cuando Culqi no responde, para que Culqi reintente.
     """
     try:
         body = await request.json()
     except Exception:
         logger.warning("culqi_webhook: cuerpo no es JSON valido")
         return {"received": True}
-
-    event_type: str = str(body.get("type") or "")
-    event_data: dict[str, Any] = body.get("data") or {}
-    event_object: dict[str, Any] = event_data.get("object") or {}
-
-    logger.info("culqi_webhook_received type=%s object_id=%s", event_type, event_object.get("id"))
-
-    # Determinar nuevo payment_status
-    new_status = _EVENT_STATUS_MAP.get(event_type)
-    if not new_status:
-        logger.info("culqi_webhook: tipo de evento no manejado '%s', ignorando.", event_type)
+    if not isinstance(body, dict):
         return {"received": True}
 
-    # Resolver order_id
-    order_id = _find_order_id_from_event(event_object)
-    if not order_id:
-        charge_id = event_object.get("id")
-        order_id = _find_order_id_from_payment(charge_id)
+    event_type = str(body.get("type") or "")
+    obj = _parse_event_object(body)
+    logger.info("culqi_webhook_received type=%s object_id=%s", event_type, obj.get("id"))
 
+    try:
+        new_status, verified = _verified_status(event_type, obj)
+    except _CulqiUnavailable as exc:
+        logger.error("culqi_webhook: no se pudo verificar %s: %s", obj.get("id"), exc)
+        return JSONResponse(status_code=503, content={"received": False})
+
+    if not new_status or not verified:
+        logger.info("culqi_webhook: evento '%s' sin estado que aplicar, ignorando.", event_type)
+        return {"received": True}
+
+    object_id = str(verified.get("id") or obj.get("id") or "")
+    order_id = _order_id_from_metadata(verified) or _find_order_id_from_payment(object_id)
     if not order_id:
-        logger.warning("culqi_webhook: no se pudo resolver order_id para evento '%s'", event_type)
+        logger.warning("culqi_webhook: no se pudo resolver order_id para %s", object_id)
         return {"received": True}
 
     now = datetime.now(timezone.utc).isoformat()
 
     try:
-        # Idempotencia: leer estado actual de la orden
         order_rows = _sb_get(
             "orders",
-            {"select": "id,payment_status", "id": f"eq.{order_id}", "limit": "1"},
+            {"select": "id,total,payment_status", "id": f"eq.{order_id}", "limit": "1"},
         )
-        if order_rows:
-            current_order_status = order_rows[0].get("payment_status")
-            if current_order_status == new_status:
-                logger.info(
-                    "culqi_webhook: orden %s ya tiene payment_status='%s', idempotente.",
-                    order_id, new_status,
-                )
-                if new_status == "paid":
-                    # Por si el cobro marco el pago pero no alcanzo a liberar el pedido.
-                    SupabaseCourierPayments().release_paid_order(order_id)
-                return {"received": True}
+        if not order_rows:
+            logger.warning("culqi_webhook: pedido %s no existe", order_id)
+            return {"received": True}
+        order = order_rows[0]
+        current_status = order.get("payment_status")
 
-        # Actualizar orders.payment_status
+        if new_status == "paid":
+            expected = int(round(float(order.get("total") or 0) * 100))
+            paid_amount = int(verified.get("amount") or 0)
+            if expected <= 0 or paid_amount != expected:
+                logger.error(
+                    "culqi_webhook: monto no coincide pedido=%s esperado=%s culqi=%s",
+                    order_id, expected, paid_amount,
+                )
+                return {"received": True}
+        elif current_status == "paid":
+            # Un cargo fallido o una orden vencida no deshacen un pago ya confirmado.
+            return {"received": True}
+
+        if current_status == new_status:
+            if new_status == "paid":
+                # Por si el cobro marco el pago pero no alcanzo a liberar el pedido.
+                SupabaseCourierPayments().release_paid_order(order_id)
+            return {"received": True}
+
         _sb_patch(
             "orders",
             {"id": f"eq.{order_id}"},
             {"payment_status": new_status, "updated_at": now},
         )
 
-        # Actualizar payments
         payment = _get_payment_for_order(order_id)
         if payment:
-            payment_id = payment.get("id")
+            payment_update: dict[str, Any] = {"status": new_status, "updated_at": now}
             ts_field = _STATUS_TIMESTAMP_MAP.get(new_status)
-            payment_update: dict[str, Any] = {
-                "status": new_status,
-                "updated_at": now,
-            }
             if ts_field:
                 payment_update[ts_field] = now
             if new_status == "paid":
                 payment_update["authorized_at"] = now
-            _sb_patch(
-                "payments",
-                {"id": f"eq.{payment_id}"},
-                payment_update,
-            )
+            _sb_patch("payments", {"id": f"eq.{payment.get('id')}"}, payment_update)
 
         if new_status == "paid":
             # Pago confirmado (Yape, PagoEfectivo...): recien ahora el pedido entra a operaciones.
@@ -217,9 +291,7 @@ async def culqi_webhook(request: Request):
             "culqi_webhook_processed type=%s order_id=%s new_status=%s",
             event_type, order_id, new_status,
         )
-
     except Exception as exc:
         logger.error("culqi_webhook_error order_id=%s: %s", order_id, exc, exc_info=True)
-        # No relanzar: siempre devolver 200 para que Culqi no reintente
 
     return {"received": True}
