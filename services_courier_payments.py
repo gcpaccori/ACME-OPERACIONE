@@ -4,9 +4,13 @@ from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid4
 
+import logging
+
 import requests
 
 from config import settings
+
+logger = logging.getLogger(__name__)
 
 
 class SupabaseCourierError(Exception):
@@ -218,6 +222,52 @@ class SupabaseCourierPayments:
                 "updated_at": datetime.now(timezone.utc).isoformat(),
             },
         )
+
+    def release_paid_order(self, order_id: str, bearer_token: str | None = None) -> bool:
+        """
+        Pasa a "placed" un pedido que esperaba pago, recien ahora que el pago se
+        confirmo, para que entre a la cola de operaciones. Solo toca pedidos en
+        pending_payment, asi que repetirlo no hace nada.
+        """
+        now = datetime.now(timezone.utc).isoformat()
+        try:
+            rows = self._request(
+                "PATCH",
+                "orders",
+                bearer_token=bearer_token,
+                params={"id": f"eq.{order_id}", "status": "eq.pending_payment"},
+                json={"status": "placed", "placed_at": now, "updated_at": now},
+                prefer="return=representation",
+            )
+        except SupabaseCourierError as exc:
+            # Base sin el estado pending_payment: el pedido ya esta en "placed" y
+            # operaciones lo libera solo por payment_status.
+            if "invalid input value for enum" in str(exc).lower():
+                return False
+            raise
+        if not rows:
+            return False
+
+        try:
+            self._request(
+                "POST",
+                "order_status_history",
+                bearer_token=bearer_token,
+                json={
+                    "id": str(uuid4()),
+                    "order_id": order_id,
+                    "from_status": "pending_payment",
+                    "to_status": "placed",
+                    "actor_type": "system",
+                    "note": "Pago confirmado, pedido enviado a operaciones",
+                    "created_at": now,
+                },
+                prefer="return=minimal",
+            )
+        except SupabaseCourierError as exc:
+            # El historial es informativo: el pedido ya quedo liberado.
+            logger.warning("release_paid_order: no se pudo guardar el historial de %s: %s", order_id, exc)
+        return True
 
     def update_payment_after_charge(
         self,

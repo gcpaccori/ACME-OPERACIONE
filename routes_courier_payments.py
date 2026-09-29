@@ -95,6 +95,14 @@ def run_parallel(*jobs) -> None:
             future.result()
 
 
+def _release_paid_order(supabase: SupabaseCourierPayments, order_id: str, token: str | None) -> None:
+    """Libera el pedido a operaciones; el cobro ya se hizo, asi que un fallo aqui no lo tumba."""
+    try:
+        supabase.release_paid_order(order_id, bearer_token=token)
+    except Exception as exc:
+        logger.error("courier_order_release_failed order_id=%s: %s", order_id, exc, exc_info=True)
+
+
 @router.post("/order", response_model=CourierPaymentOrderResponse)
 def create_courier_payment_order(
     payload: CourierPaymentOrderRequest,
@@ -258,6 +266,7 @@ def charge_courier_payment(
                 "courier_payment_charge_idempotent order_id=%s attempt_id=%s",
                 order["id"], existing_attempt.get("id"),
             )
+            _release_paid_order(supabase, str(order["id"]), token)
             prev_meta = existing_attempt.get("metadata") or {}
             return CourierPaymentChargeResponse(
                 exito=True,
@@ -325,6 +334,8 @@ def charge_courier_payment(
                 bearer_token=token,
             ),
         )
+        if payment_status == "paid":
+            _release_paid_order(supabase, str(order["id"]), token)
         logger.info("courier_payment_charge_ok order_id=%s status=%s elapsed_ms=%s", order["id"], payment_status, int((time.perf_counter() - started_at) * 1000))
 
         return CourierPaymentChargeResponse(
