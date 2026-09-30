@@ -166,7 +166,7 @@ def _verified_status(event_type: str, obj: dict[str, Any]) -> tuple[str | None, 
             # Culqi no reconoce la orden: evento falso o de otra cuenta.
             return None, None
         if not consulta.get("exito"):
-            raise _CulqiUnavailable(consulta.get("mensaje") or "No se pudo consultar la orden en Culqi.")
+            raise CulqiUnavailable(consulta.get("mensaje") or "No se pudo consultar la orden en Culqi.")
         verified = consulta.get("respuesta_completa") or {}
         state = str(verified.get("state") or "").lower()
         if state == "paid":
@@ -181,7 +181,7 @@ def _verified_status(event_type: str, obj: dict[str, Any]) -> tuple[str | None, 
         if verified.get("object") == "error":
             return None, None
         if not consulta.get("exito") or verified.get("object") != "charge":
-            raise _CulqiUnavailable(consulta.get("mensaje") or "No se pudo consultar el cargo en Culqi.")
+            raise CulqiUnavailable(consulta.get("mensaje") or "No se pudo consultar el cargo en Culqi.")
         outcome = verified.get("outcome") or {}
         outcome_type = str(outcome.get("type") or "").lower()
         if outcome_type in ("venta_exitosa", "successful", "success") or verified.get("paid") is True:
@@ -193,7 +193,7 @@ def _verified_status(event_type: str, obj: dict[str, Any]) -> tuple[str | None, 
     return None, None
 
 
-class _CulqiUnavailable(Exception):
+class CulqiUnavailable(Exception):
     pass
 
 
@@ -221,7 +221,7 @@ async def culqi_webhook(request: Request):
 
     try:
         new_status, verified = _verified_status(event_type, obj)
-    except _CulqiUnavailable as exc:
+    except CulqiUnavailable as exc:
         logger.error("culqi_webhook: no se pudo verificar %s: %s", obj.get("id"), exc)
         return JSONResponse(status_code=503, content={"received": False})
 
@@ -229,11 +229,27 @@ async def culqi_webhook(request: Request):
         logger.info("culqi_webhook: evento '%s' sin estado que aplicar, ignorando.", event_type)
         return {"received": True}
 
+    apply_verified_status(event_type, new_status, verified, obj)
+    return {"received": True}
+
+
+def apply_verified_status(
+    event_type: str,
+    new_status: str,
+    verified: dict[str, Any],
+    obj: dict[str, Any] | None = None,
+) -> str | None:
+    """
+    Aplica al pedido un estado ya confirmado por Culqi. Lo usan el webhook y la
+    sincronizacion que piden la web y la app. Devuelve el estado aplicado, o
+    None si no correspondia aplicar nada.
+    """
+    obj = obj or {}
     object_id = str(verified.get("id") or obj.get("id") or "")
     order_id = _order_id_from_metadata(verified) or _find_order_id_from_payment(object_id)
     if not order_id:
         logger.warning("culqi_webhook: no se pudo resolver order_id para %s", object_id)
-        return {"received": True}
+        return None
 
     now = datetime.now(timezone.utc).isoformat()
 
@@ -244,7 +260,7 @@ async def culqi_webhook(request: Request):
         )
         if not order_rows:
             logger.warning("culqi_webhook: pedido %s no existe", order_id)
-            return {"received": True}
+            return None
         order = order_rows[0]
         current_status = order.get("payment_status")
 
@@ -256,16 +272,16 @@ async def culqi_webhook(request: Request):
                     "culqi_webhook: monto no coincide pedido=%s esperado=%s culqi=%s",
                     order_id, expected, paid_amount,
                 )
-                return {"received": True}
+                return None
         elif current_status == "paid":
             # Un cargo fallido o una orden vencida no deshacen un pago ya confirmado.
-            return {"received": True}
+            return None
 
         if current_status == new_status:
             if new_status == "paid":
                 # Por si el cobro marco el pago pero no alcanzo a liberar el pedido.
                 SupabaseCourierPayments().release_paid_order(order_id)
-            return {"received": True}
+            return new_status
 
         _sb_patch(
             "orders",
@@ -291,7 +307,22 @@ async def culqi_webhook(request: Request):
             "culqi_webhook_processed type=%s order_id=%s new_status=%s",
             event_type, order_id, new_status,
         )
+        return new_status
     except Exception as exc:
         logger.error("culqi_webhook_error order_id=%s: %s", order_id, exc, exc_info=True)
 
-    return {"received": True}
+    return None
+
+
+def sync_culqi_order(culqi_order_id: str) -> str | None:
+    """
+    Consulta una orden Culqi (PagoEfectivo, banca movil, agentes, billeteras) y
+    aplica su estado. Es el respaldo del webhook: la web y la app lo piden
+    mientras el pedido espera pago, asi el pedido se libera aunque el webhook
+    no llegue. Lanza CulqiUnavailable si Culqi no responde.
+    """
+    obj = {"id": culqi_order_id, "object": "order"}
+    new_status, verified = _verified_status("order.status.changed", obj)
+    if not new_status or not verified:
+        return None
+    return apply_verified_status("order.status.changed", new_status, verified, obj)

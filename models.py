@@ -123,6 +123,15 @@ class CourierPaymentChargeRequest(BaseModel):
     email_cliente: Optional[EmailStr] = None
     nombre_cliente: Optional[str] = None
 
+class CourierPaymentSyncRequest(BaseModel):
+    order_id: str
+
+
+class CourierPaymentSyncResponse(BaseModel):
+    order_id: str
+    payment_status: str
+
+
 class CourierPaymentChargeResponse(BaseModel):
     exito: bool
     courier_order_id: str

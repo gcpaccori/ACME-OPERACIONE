@@ -9,10 +9,13 @@ from models import (
     CourierPaymentChargeResponse,
     CourierPaymentOrderRequest,
     CourierPaymentOrderResponse,
+    CourierPaymentSyncRequest,
+    CourierPaymentSyncResponse,
 )
 from services_courier_payments import SupabaseCourierError, SupabaseCourierPayments
 from services_culqi import CulqiService
 from services_supabase_auth import SupabaseAuthError, verify_supabase_user
+from routes_webhooks import CulqiUnavailable, sync_culqi_order
 
 
 router = APIRouter(prefix="/api/courier/payments", tags=["courier-payments"])
@@ -376,6 +379,50 @@ def charge_courier_payment(
             transaccion_id=transaction_id,
             mensaje=result.get("mensaje", "Pago procesado"),
         )
+    except HTTPException:
+        raise
+    except SupabaseCourierError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@router.post("/sync", response_model=CourierPaymentSyncResponse)
+def sync_courier_payment(
+    payload: CourierPaymentSyncRequest,
+    authorization: str | None = Header(default=None),
+):
+    """
+    Consulta en Culqi el pago diferido de un pedido (PagoEfectivo, banca movil,
+    agentes, billeteras) y, si ya se pago, lo marca pagado y lo manda a
+    operaciones. La web y la app lo llaman mientras el pedido espera pago, asi
+    no depende solo del webhook.
+    """
+    token = bearer_token(authorization)
+    if not token:
+        raise HTTPException(status_code=401, detail="Inicia sesion para ver tu pedido.")
+
+    supabase = SupabaseCourierPayments()
+    try:
+        order = supabase.get_order(payload.order_id, token)
+        require_order_owner(token, order)
+        order_id = str(order["id"])
+        status = str(order.get("payment_status") or "pending")
+
+        if status != "paid":
+            pending = supabase.find_pending_payment(order_id, token)
+            reference = str((pending or {}).get("external_reference") or "").strip()
+            if reference.startswith("ord_"):
+                try:
+                    applied = sync_culqi_order(reference)
+                except CulqiUnavailable as exc:
+                    logger.warning("courier_payment_sync_unavailable order_id=%s: %s", order_id, exc)
+                    applied = None
+                if applied:
+                    status = applied
+        else:
+            # Por si el pago quedo registrado pero el pedido no alcanzo a salir.
+            _release_paid_order(supabase, order_id, token)
+
+        return CourierPaymentSyncResponse(order_id=order_id, payment_status=status)
     except HTTPException:
         raise
     except SupabaseCourierError as exc:
