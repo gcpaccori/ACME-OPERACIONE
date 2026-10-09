@@ -21,6 +21,7 @@ from services_izipay import (
     izipay_order_id,
     summarize_answer,
 )
+from services_izipay_sdk import IzipaySdkService, izipay_order_number, summarize_payload
 
 router = APIRouter(prefix="/api/webhooks", tags=["webhooks"])
 logger = logging.getLogger(__name__)
@@ -454,3 +455,89 @@ async def izipay_ipn(request: Request):
         (answer.get("orderDetails") or {}).get("orderId"), answer.get("orderStatus"), applied,
     )
     return PlainTextResponse(f"OK {answer.get('orderStatus') or ''}".strip())
+
+
+# ---------------------------------------------------------------------------
+# SDK de Izipay (tarjeta, Yape, Plin, QR)
+# ---------------------------------------------------------------------------
+
+def izipay_sdk_verified(resumen: dict[str, Any], raw: dict[str, Any] | None = None) -> dict[str, Any] | None:
+    """
+    Convierte el resumen de una respuesta del SDK ya autenticada (firma valida
+    o consulta directa a Izipay) al formato que aplica apply_verified_status.
+    El pedido sale del campo personalizado firmado, y si falta, del numero de
+    pedido guardado en payments.
+    """
+    order_number = resumen.get("order_number")
+    if not order_number:
+        return None
+    courier_order_id = resumen.get("courier_order_id")
+    if courier_order_id and izipay_order_number(courier_order_id) != order_number:
+        logger.error("izipay_sdk: el pedido %s no corresponde al numero %s", courier_order_id, order_number)
+        return None
+    if resumen.get("currency") and resumen.get("currency") != "PEN":
+        logger.error("izipay_sdk: moneda inesperada %s en %s", resumen.get("currency"), order_number)
+        return None
+    return {
+        "id": order_number,
+        "amount": int(resumen.get("amount") or 0),
+        "metadata": {"pedido_id": courier_order_id} if courier_order_id else {},
+        "transaction_uuid": resumen.get("unique_id") if resumen.get("status") == "paid" else None,
+        "raw": raw,
+    }
+
+
+def apply_izipay_sdk_payload(payload: dict[str, Any], event_type: str) -> str | None:
+    """Aplica una respuesta del SDK cuya firma ya se verifico."""
+    resumen = summarize_payload(payload)
+    new_status = resumen.get("status")
+    verified = izipay_sdk_verified(resumen, payload)
+    if not new_status or not verified:
+        return None
+    return apply_verified_status(event_type, new_status, verified, provider="izipay_sdk")
+
+
+def sync_izipay_sdk_order(courier_order_id: str) -> str | None:
+    """
+    Pregunta a Izipay si el pedido ya se pago y, si es asi, lo aplica.
+    Respaldo de la IPN: la web y la app lo piden mientras el pedido espera
+    pago. Lanza IzipaySdkUnavailable si Izipay no responde.
+    """
+    consulta = IzipaySdkService().consultar_orden(izipay_order_number(courier_order_id))
+    if not consulta.get("encontrada"):
+        return None
+    resumen = consulta["resumen"]
+    resumen["courier_order_id"] = resumen.get("courier_order_id") or courier_order_id
+    verified = izipay_sdk_verified(resumen, consulta.get("respuesta_completa"))
+    if not verified:
+        return None
+    return apply_verified_status("izipay_sdk.order.search", "paid", verified, provider="izipay_sdk")
+
+
+@router.post("/izipay-sdk")
+async def izipay_sdk_ipn(request: Request):
+    """
+    IPN del SDK de Izipay (campo urlIPN del checkout).
+
+    Llega como JSON con payloadHttp y signature. Solo se acepta si la firma
+    coincide (HMAC-SHA-256 con la clave hash), y un "pagado" solo si el monto
+    coincide con el total del pedido.
+    """
+    try:
+        body = json.loads((await request.body()).decode("utf-8", errors="replace") or "{}")
+    except ValueError:
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+    payload = IzipaySdkService().leer_firmado(str(body.get("payloadHttp") or ""), str(body.get("signature") or ""))
+    if payload is None:
+        logger.warning("izipay_sdk_ipn: firma invalida (code=%s)", body.get("code"))
+        return JSONResponse(status_code=400, content={"received": False})
+
+    applied = apply_izipay_sdk_payload(payload, "izipay_sdk.ipn")
+    resumen = summarize_payload(payload)
+    logger.info(
+        "izipay_sdk_ipn_received order=%s code=%s applied=%s",
+        resumen.get("order_number"), resumen.get("code"), applied,
+    )
+    return {"received": True}

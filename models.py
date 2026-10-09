@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr, Field
-from typing import Optional, List
+from typing import Any, Dict, Optional, List
 from datetime import datetime
 
 # ============ PRODUCTOS ============
@@ -121,6 +121,8 @@ class CourierPaymentOrderResponse(BaseModel):
     form_token: Optional[str] = None
     public_key: Optional[str] = None
     mode: Optional[str] = None
+    # SDK de Izipay ("izipay_sdk"): lo que necesita el checkout en el navegador.
+    izipay_checkout: Optional[Dict[str, Any]] = None
 
 
 class IzipayConfirmRequest(BaseModel):
@@ -129,6 +131,13 @@ class IzipayConfirmRequest(BaseModel):
     kr_answer: str = Field(..., min_length=2)
     kr_hash: str = Field(..., min_length=10)
     kr_hash_key: Optional[str] = None
+
+
+class IzipaySdkConfirmRequest(BaseModel):
+    """Respuesta firmada que el SDK de Izipay entrega al navegador."""
+    order_id: str = Field(..., min_length=1)
+    payload_http: str = Field(..., min_length=2)
+    signature: str = Field(..., min_length=10)
 
 
 class IzipayConfirmResponse(BaseModel):

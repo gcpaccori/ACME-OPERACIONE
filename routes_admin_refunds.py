@@ -13,6 +13,7 @@ from fastapi import APIRouter, Header, HTTPException
 from config import settings
 from models import AdminRefundRequest, AdminRefundResponse
 from services_izipay import IzipayService, IzipayUnavailable, izipay_order_id
+from services_izipay_sdk import IzipaySdkService, IzipaySdkUnavailable, izipay_order_number
 
 router = APIRouter(prefix="/api/admin", tags=["admin-refunds"])
 logger = logging.getLogger(__name__)
@@ -194,7 +195,7 @@ def admin_refund(
         {
             "select": "id,amount,currency,external_reference,status,provider",
             "order_id": f"eq.{payload.order_id}",
-            "provider": "in.(culqi,izipay)",
+            "provider": "in.(culqi,izipay,izipay_sdk)",
             "status": "eq.paid",
             "order": "requested_at.desc",
             "limit": "1",
@@ -217,8 +218,8 @@ def admin_refund(
     if refund_amount_centimos <= 0:
         raise HTTPException(status_code=400, detail="El monto del reembolso debe ser mayor a cero.")
 
-    if provider == "izipay":
-        return _izipay_refund(payload, payment, refund_amount, refund_amount_centimos)
+    if provider in ("izipay", "izipay_sdk"):
+        return _izipay_refund(payload, payment, provider, refund_amount, refund_amount_centimos)
 
     # Ejecutar reembolso en Culqi
     culqi_result = _culqi_refund(charge_id, refund_amount_centimos, payload.reason)
@@ -286,22 +287,40 @@ def admin_refund(
     )
 
 
-def _izipay_refund(payload: AdminRefundRequest, payment: dict[str, Any], refund_amount: float, refund_amount_centimos: int) -> AdminRefundResponse:
-    """Reembolso de un pago Izipay: se busca en Order/Get la transaccion que cobro."""
-    service = IzipayService()
-    try:
-        consulta = service.obtener_orden(izipay_order_id(payload.order_id))
-    except IzipayUnavailable as exc:
-        raise HTTPException(status_code=502, detail=f"No se pudo consultar el pago en Izipay: {exc}") from exc
-    resumen = consulta.get("resumen") or {}
-    transaction_uuid = resumen.get("transaction_uuid")
-    if resumen.get("status") != "paid" or not transaction_uuid:
-        raise HTTPException(status_code=400, detail="Izipay no tiene un pago cobrado para este pedido.")
+def _izipay_refund(
+    payload: AdminRefundRequest,
+    payment: dict[str, Any],
+    provider: str,
+    refund_amount: float,
+    refund_amount_centimos: int,
+) -> AdminRefundResponse:
+    """Reembolso de un pago Izipay: se consulta en Izipay la transaccion que cobro."""
+    if provider == "izipay_sdk":
+        sdk = IzipaySdkService()
+        try:
+            consulta = sdk.consultar_orden(izipay_order_number(payload.order_id))
+        except IzipaySdkUnavailable as exc:
+            raise HTTPException(status_code=502, detail=f"No se pudo consultar el pago en Izipay: {exc}") from exc
+        resumen = consulta.get("resumen") or {}
+        transaction_uuid = resumen.get("unique_id")
+        if not consulta.get("encontrada") or not transaction_uuid:
+            raise HTTPException(status_code=400, detail="Izipay no tiene un pago cobrado para este pedido.")
+        result = sdk.reembolsar(resumen, refund_amount_centimos)
+    else:
+        service = IzipayService()
+        try:
+            consulta = service.obtener_orden(izipay_order_id(payload.order_id))
+        except IzipayUnavailable as exc:
+            raise HTTPException(status_code=502, detail=f"No se pudo consultar el pago en Izipay: {exc}") from exc
+        resumen = consulta.get("resumen") or {}
+        transaction_uuid = resumen.get("transaction_uuid")
+        if resumen.get("status") != "paid" or not transaction_uuid:
+            raise HTTPException(status_code=400, detail="Izipay no tiene un pago cobrado para este pedido.")
+        try:
+            result = service.reembolsar(transaction_uuid, refund_amount_centimos, payload.reason)
+        except IzipayUnavailable as exc:
+            raise HTTPException(status_code=502, detail=f"No se pudo contactar a Izipay: {exc}") from exc
 
-    try:
-        result = service.reembolsar(transaction_uuid, refund_amount_centimos, payload.reason)
-    except IzipayUnavailable as exc:
-        raise HTTPException(status_code=502, detail=f"No se pudo contactar a Izipay: {exc}") from exc
     if not result.get("exito"):
         logger.warning("admin_refund_izipay_error order=%s uuid=%s msg=%s", payload.order_id, transaction_uuid, result.get("mensaje"))
         raise HTTPException(status_code=502, detail=f"Izipay rechazo el reembolso: {result.get('mensaje')}")

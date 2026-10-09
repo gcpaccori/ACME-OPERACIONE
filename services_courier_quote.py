@@ -336,14 +336,15 @@ def calculate_road_distance_km(lat1: float, lng1: float, lat2: float, lng2: floa
 
 def calculate_payment_processing_fee(amount: float) -> dict[str, Any]:
     """Comision referencial de la pasarela para pagos nacionales."""
-    if active_payment_provider() == "izipay":
+    provider = active_payment_provider()
+    if provider in ("izipay", "izipay_sdk"):
         # La comision de Izipay la asume el comercio: no se suma al total ni
         # tiene minimo por compra como el de Culqi.
         return {
             "fee": 0.0,
             "rate": 0.0,
             "fixed": 0.0,
-            "provider": "izipay",
+            "provider": provider,
             "note": "Comision Izipay absorbida por el comercio.",
             "tax_amount": 0.0,
         }

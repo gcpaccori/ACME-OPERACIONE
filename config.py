@@ -29,9 +29,32 @@ class Settings(BaseSettings):
     # de las ordenes de Culqi; se deja S/ 1 para no cobrar pedidos en cero.
     izipay_min_order_centimos: int = int(os.getenv("IZIPAY_MIN_ORDER_CENTIMOS", "100"))
 
-    # Pasarela activa: "izipay" o "culqi". Si no se fija, se usa Izipay cuando
-    # sus claves estan configuradas y Culqi en caso contrario, asi desplegar
-    # este cambio sin las variables nuevas no rompe los cobros actuales.
+    # SDK de Izipay (boton de pagos de Punto Web): tarjeta, Yape, Plin y QR.
+    # Las claves salen del panel de comercio (sandbox-panel.izipay.pe para
+    # pruebas, panel.izipay.pe en produccion) > Desarrolladores > Claves.
+    izipay_sdk_merchant_code: str = os.getenv("IZIPAY_SDK_MERCHANT_CODE", "")
+    # "Clave API del nuevo boton de pagos": solo sirve para pedir el token de sesion.
+    izipay_sdk_api_key: str = os.getenv("IZIPAY_SDK_API_KEY", "")
+    # "Clave Hash": firma las respuestas del checkout y de la IPN.
+    izipay_sdk_hash_key: str = os.getenv("IZIPAY_SDK_HASH_KEY", "")
+    # "Clave publica IZIPAY" (RSA): la usa el checkout en el navegador.
+    izipay_sdk_rsa_public_key: str = os.getenv("IZIPAY_SDK_RSA_PUBLIC_KEY", "")
+    # "sandbox" o "production".
+    izipay_sdk_env: str = os.getenv("IZIPAY_SDK_ENV", "sandbox")
+    # URL publica de /api/webhooks/izipay-sdk; Izipay la recibe en cada pago.
+    izipay_sdk_ipn_url: str = os.getenv("IZIPAY_SDK_IPN_URL", "")
+    # RUC del comercio: Izipay lo pide para las devoluciones.
+    izipay_sdk_ruc: str = os.getenv("IZIPAY_SDK_RUC", "")
+    izipay_sdk_pay_methods: str = os.getenv("IZIPAY_SDK_PAY_METHODS", "CARD,YAPE_CODE,PAGO_PUSH,QR")
+    # Izipay exige direccion de facturacion; los pedidos no la guardan.
+    izipay_sdk_billing_street: str = os.getenv("IZIPAY_SDK_BILLING_STREET", "Jr Virrey Toledo 100")
+    izipay_sdk_billing_city: str = os.getenv("IZIPAY_SDK_BILLING_CITY", "Huancavelica")
+    izipay_sdk_billing_state: str = os.getenv("IZIPAY_SDK_BILLING_STATE", "Huancavelica")
+    izipay_sdk_billing_postal_code: str = os.getenv("IZIPAY_SDK_BILLING_POSTAL_CODE", "09001")
+
+    # Pasarela activa: "izipay_sdk", "izipay" o "culqi". Si no se fija, se usa
+    # la primera que tenga sus claves configuradas en ese orden, y Culqi si
+    # ninguna las tiene: desplegar sin las variables nuevas no rompe los cobros.
     payment_provider: str = os.getenv("PAYMENT_PROVIDER", "")
     
     # API
@@ -81,8 +104,15 @@ class Settings(BaseSettings):
 def active_payment_provider() -> str:
     """Pasarela con la que se abren los pagos nuevos."""
     explicit = str(settings.payment_provider or "").strip().lower()
-    if explicit in ("izipay", "culqi"):
+    if explicit in ("izipay_sdk", "izipay", "culqi"):
         return explicit
+    if (
+        settings.izipay_sdk_merchant_code
+        and settings.izipay_sdk_api_key
+        and settings.izipay_sdk_hash_key
+        and settings.izipay_sdk_rsa_public_key
+    ):
+        return "izipay_sdk"
     if settings.izipay_username and settings.izipay_password and settings.izipay_public_key:
         return "izipay"
     return "culqi"
