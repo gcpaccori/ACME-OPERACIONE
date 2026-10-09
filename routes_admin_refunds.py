@@ -12,6 +12,7 @@ from fastapi import APIRouter, Header, HTTPException
 
 from config import settings
 from models import AdminRefundRequest, AdminRefundResponse
+from services_izipay import IzipayService, IzipayUnavailable, izipay_order_id
 
 router = APIRouter(prefix="/api/admin", tags=["admin-refunds"])
 logger = logging.getLogger(__name__)
@@ -163,7 +164,7 @@ def admin_refund(
     authorization: str | None = Header(default=None),
 ):
     """
-    Ejecutar un reembolso (total o parcial) sobre un pedido pagado con Culqi.
+    Ejecutar un reembolso (total o parcial) sobre un pedido pagado con Culqi o Izipay.
     Requiere Bearer token de usuario con rol admin.
     """
     token = _extract_bearer(authorization)
@@ -187,23 +188,25 @@ def admin_refund(
             detail=f"El pedido no esta pagado (payment_status='{order.get('payment_status')}').",
         )
 
-    # Buscar payment con Culqi y estado 'paid'
+    # Buscar el pago en linea (Culqi o Izipay) en estado 'paid'
     payment_rows = _sb_get(
         "payments",
         {
-            "select": "id,amount,currency,external_reference,status",
+            "select": "id,amount,currency,external_reference,status,provider",
             "order_id": f"eq.{payload.order_id}",
-            "provider": "eq.culqi",
+            "provider": "in.(culqi,izipay)",
             "status": "eq.paid",
+            "order": "requested_at.desc",
             "limit": "1",
         },
     )
     if not payment_rows:
-        raise HTTPException(status_code=400, detail="No se encontro un pago con Culqi en estado 'paid' para este pedido.")
+        raise HTTPException(status_code=400, detail="No se encontro un pago en linea en estado 'paid' para este pedido.")
 
     payment = payment_rows[0]
+    provider = str(payment.get("provider") or "culqi")
     charge_id = payment.get("external_reference")
-    if not charge_id:
+    if provider == "culqi" and not charge_id:
         raise HTTPException(status_code=400, detail="El pago no tiene referencia externa de Culqi.")
 
     # Determinar monto del reembolso
@@ -213,6 +216,9 @@ def admin_refund(
 
     if refund_amount_centimos <= 0:
         raise HTTPException(status_code=400, detail="El monto del reembolso debe ser mayor a cero.")
+
+    if provider == "izipay":
+        return _izipay_refund(payload, payment, refund_amount, refund_amount_centimos)
 
     # Ejecutar reembolso en Culqi
     culqi_result = _culqi_refund(charge_id, refund_amount_centimos, payload.reason)
@@ -272,6 +278,57 @@ def admin_refund(
         payload.order_id, charge_id, refund_id, refund_amount,
     )
 
+    return AdminRefundResponse(
+        exito=True,
+        refund_id=refund_id,
+        amount=refund_amount,
+        mensaje=f"Reembolso de S/ {refund_amount:.2f} procesado exitosamente.",
+    )
+
+
+def _izipay_refund(payload: AdminRefundRequest, payment: dict[str, Any], refund_amount: float, refund_amount_centimos: int) -> AdminRefundResponse:
+    """Reembolso de un pago Izipay: se busca en Order/Get la transaccion que cobro."""
+    service = IzipayService()
+    try:
+        consulta = service.obtener_orden(izipay_order_id(payload.order_id))
+    except IzipayUnavailable as exc:
+        raise HTTPException(status_code=502, detail=f"No se pudo consultar el pago en Izipay: {exc}") from exc
+    resumen = consulta.get("resumen") or {}
+    transaction_uuid = resumen.get("transaction_uuid")
+    if resumen.get("status") != "paid" or not transaction_uuid:
+        raise HTTPException(status_code=400, detail="Izipay no tiene un pago cobrado para este pedido.")
+
+    try:
+        result = service.reembolsar(transaction_uuid, refund_amount_centimos, payload.reason)
+    except IzipayUnavailable as exc:
+        raise HTTPException(status_code=502, detail=f"No se pudo contactar a Izipay: {exc}") from exc
+    if not result.get("exito"):
+        logger.warning("admin_refund_izipay_error order=%s uuid=%s msg=%s", payload.order_id, transaction_uuid, result.get("mensaje"))
+        raise HTTPException(status_code=502, detail=f"Izipay rechazo el reembolso: {result.get('mensaje')}")
+
+    refund_id = result.get("refund_id")
+    now = datetime.now(timezone.utc).isoformat()
+    _sb_patch("payments", {"id": f"eq.{payment['id']}"}, {"status": "refunded", "updated_at": now})
+    _sb_patch("orders", {"id": f"eq.{payload.order_id}"}, {"payment_status": "refunded", "updated_at": now})
+    try:
+        _sb_post(
+            "payment_transactions",
+            {
+                "id": str(uuid4()),
+                "payment_id": payment["id"],
+                "transaction_type": "refund",
+                "amount": refund_amount,
+                "provider_transaction_id": refund_id,
+                "status": "refunded",
+                "request_json": {"transaction_uuid": transaction_uuid, "amount": refund_amount_centimos, "reason": payload.reason},
+                "response_json": result.get("respuesta_completa"),
+                "created_at": now,
+            },
+        )
+    except Exception as exc:
+        logger.warning("admin_refund: no se pudo insertar en payment_transactions: %s", exc)
+
+    logger.info("admin_refund_izipay_ok order=%s uuid=%s refund_id=%s amount=%.2f", payload.order_id, transaction_uuid, refund_id, refund_amount)
     return AdminRefundResponse(
         exito=True,
         refund_id=refund_id,

@@ -115,6 +115,28 @@ class CourierPaymentOrderResponse(BaseModel):
     payment_id: str
     monto_centimos: int
     mensaje: str
+    # Pasarela con la que se abrio el pago: "culqi" o "izipay". Con Izipay
+    # vienen tambien el formToken y la clave publica para el formulario.
+    provider: str = "culqi"
+    form_token: Optional[str] = None
+    public_key: Optional[str] = None
+    mode: Optional[str] = None
+
+
+class IzipayConfirmRequest(BaseModel):
+    """Respuesta firmada que Izipay entrega al navegador (KR.onSubmit)."""
+    order_id: str = Field(..., min_length=1)
+    kr_answer: str = Field(..., min_length=2)
+    kr_hash: str = Field(..., min_length=10)
+    kr_hash_key: Optional[str] = None
+
+
+class IzipayConfirmResponse(BaseModel):
+    exito: bool
+    courier_order_id: str
+    payment_status: str
+    transaccion_id: Optional[str] = None
+    mensaje: str
 
 class CourierPaymentChargeRequest(BaseModel):
     order_id: str = Field(..., min_length=1)

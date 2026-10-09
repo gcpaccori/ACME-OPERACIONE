@@ -5,14 +5,22 @@ from datetime import datetime, timezone
 from typing import Any
 
 import json
+from urllib.parse import parse_qs
+from uuid import uuid4
 
 import requests
 from fastapi import APIRouter, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, PlainTextResponse
 
 from config import settings
 from services_courier_payments import SupabaseCourierPayments
 from services_culqi import CulqiService
+from services_izipay import (
+    IzipayService,
+    courier_order_id_from_izipay,
+    izipay_order_id,
+    summarize_answer,
+)
 
 router = APIRouter(prefix="/api/webhooks", tags=["webhooks"])
 logger = logging.getLogger(__name__)
@@ -135,13 +143,25 @@ def _find_order_id_from_payment(external_reference: str | None) -> str | None:
     return None
 
 
-def _get_payment_for_order(order_id: str) -> dict[str, Any] | None:
+def _sb_post(table: str, data: dict[str, Any]) -> None:
+    try:
+        requests.post(
+            f"{_base_url()}/{table}",
+            headers={**_supabase_headers(), "Prefer": "return=minimal"},
+            json=data,
+            timeout=10,
+        )
+    except Exception as exc:
+        logger.warning("webhook _sb_post %s failed: %s", table, exc)
+
+
+def _get_payment_for_order(order_id: str, provider: str = "culqi") -> dict[str, Any] | None:
     rows = _sb_get(
         "payments",
         {
             "select": "id,status,external_reference",
             "order_id": f"eq.{order_id}",
-            "provider": "eq.culqi",
+            "provider": f"eq.{provider}",
             "order": "requested_at.desc",
             "limit": "1",
         },
@@ -238,11 +258,12 @@ def apply_verified_status(
     new_status: str,
     verified: dict[str, Any],
     obj: dict[str, Any] | None = None,
+    provider: str = "culqi",
 ) -> str | None:
     """
-    Aplica al pedido un estado ya confirmado por Culqi. Lo usan el webhook y la
-    sincronizacion que piden la web y la app. Devuelve el estado aplicado, o
-    None si no correspondia aplicar nada.
+    Aplica al pedido un estado ya confirmado por la pasarela (Culqi o Izipay).
+    Lo usan los webhooks y la sincronizacion que piden la web y la app.
+    Devuelve el estado aplicado, o None si no correspondia aplicar nada.
     """
     obj = obj or {}
     object_id = str(verified.get("id") or obj.get("id") or "")
@@ -289,7 +310,7 @@ def apply_verified_status(
             {"payment_status": new_status, "updated_at": now},
         )
 
-        payment = _get_payment_for_order(order_id)
+        payment = _get_payment_for_order(order_id, provider)
         if payment:
             payment_update: dict[str, Any] = {"status": new_status, "updated_at": now}
             ts_field = _STATUS_TIMESTAMP_MAP.get(new_status)
@@ -298,14 +319,30 @@ def apply_verified_status(
             if new_status == "paid":
                 payment_update["authorized_at"] = now
             _sb_patch("payments", {"id": f"eq.{payment.get('id')}"}, payment_update)
+            if verified.get("transaction_uuid"):
+                # Izipay: se guarda la transaccion que cobro, para auditoria.
+                _sb_post(
+                    "payment_transactions",
+                    {
+                        "id": str(uuid4()),
+                        "payment_id": payment.get("id"),
+                        "transaction_type": "capture",
+                        "amount": float(order.get("total") or 0),
+                        "provider_transaction_id": verified.get("transaction_uuid"),
+                        "status": new_status,
+                        "request_json": {"order_id": order_id, "provider": provider},
+                        "response_json": verified.get("raw"),
+                        "created_at": now,
+                    },
+                )
 
         if new_status == "paid":
             # Pago confirmado (Yape, PagoEfectivo...): recien ahora el pedido entra a operaciones.
             SupabaseCourierPayments().release_paid_order(order_id)
 
         logger.info(
-            "culqi_webhook_processed type=%s order_id=%s new_status=%s",
-            event_type, order_id, new_status,
+            "payment_status_applied provider=%s type=%s order_id=%s new_status=%s",
+            provider, event_type, order_id, new_status,
         )
         return new_status
     except Exception as exc:
@@ -326,3 +363,94 @@ def sync_culqi_order(culqi_order_id: str) -> str | None:
     if not new_status or not verified:
         return None
     return apply_verified_status("order.status.changed", new_status, verified, obj)
+
+
+# ---------------------------------------------------------------------------
+# Izipay
+# ---------------------------------------------------------------------------
+
+def izipay_verified(resumen: dict[str, Any], raw: dict[str, Any] | None = None) -> dict[str, Any] | None:
+    """
+    Convierte el resumen de una respuesta de Izipay ya autenticada (firma
+    valida o consulta directa a Order/Get) al formato que aplica
+    apply_verified_status. Devuelve None si no es una orden de un pedido ACME o
+    no esta en soles.
+    """
+    order_id = courier_order_id_from_izipay(resumen.get("order_id"))
+    if not order_id:
+        return None
+    if resumen.get("currency") and resumen.get("currency") != "PEN":
+        logger.error("izipay: moneda inesperada %s en %s", resumen.get("currency"), resumen.get("order_id"))
+        return None
+    return {
+        "id": resumen.get("order_id"),
+        "amount": int(resumen.get("amount") or 0),
+        "metadata": {"pedido_id": order_id},
+        "transaction_uuid": resumen.get("transaction_uuid") if resumen.get("status") == "paid" else None,
+        "raw": raw,
+    }
+
+
+def apply_izipay_answer(answer: dict[str, Any], event_type: str) -> str | None:
+    """Aplica una respuesta de Izipay cuya firma ya se verifico."""
+    resumen = summarize_answer(answer)
+    new_status = resumen.get("status")
+    verified = izipay_verified(resumen, answer)
+    if not new_status or not verified:
+        return None
+    return apply_verified_status(event_type, new_status, verified, provider="izipay")
+
+
+def sync_izipay_order(courier_order_id: str) -> str | None:
+    """
+    Consulta en Izipay los intentos de pago del pedido y aplica el resultado.
+    Respaldo de la IPN: la web y la app lo piden mientras el pedido espera
+    pago. Lanza IzipayUnavailable si Izipay no responde.
+    """
+    consulta = IzipayService().obtener_orden(izipay_order_id(courier_order_id))
+    if not consulta.get("encontrada"):
+        return None
+    resumen = consulta["resumen"]
+    new_status = resumen.get("status")
+    verified = izipay_verified(resumen, consulta.get("respuesta_completa"))
+    if not new_status or not verified:
+        return None
+    return apply_verified_status("izipay.order.get", new_status, verified, provider="izipay")
+
+
+async def _izipay_fields(request: Request) -> dict[str, str]:
+    """La IPN llega como formulario (x-www-form-urlencoded); se acepta JSON por si acaso."""
+    raw = (await request.body()).decode("utf-8", errors="replace")
+    content_type = request.headers.get("content-type", "")
+    if "json" in content_type:
+        try:
+            data = json.loads(raw)
+            return {str(k): str(v) for k, v in data.items()} if isinstance(data, dict) else {}
+        except ValueError:
+            return {}
+    return {k: v[0] for k, v in parse_qs(raw, keep_blank_values=True).items() if v}
+
+
+@router.post("/izipay")
+async def izipay_ipn(request: Request):
+    """
+    IPN de Izipay ("URL de notificacion al final del pago").
+
+    Solo se acepta si la firma kr-hash coincide (HMAC-SHA-256 con la contrasena
+    de la API REST), y un "pagado" solo si el monto coincide con el total del
+    pedido. Responde 200 cuando la notificacion se proceso o no aplica, para
+    que Izipay no reintente en vano.
+    """
+    fields = await _izipay_fields(request)
+    kr_answer = fields.get("kr-answer", "")
+    if not IzipayService().verificar_firma(kr_answer, fields.get("kr-hash", ""), fields.get("kr-hash-key") or "password"):
+        logger.warning("izipay_ipn: firma invalida")
+        return PlainTextResponse("Invalid signature", status_code=400)
+
+    answer = IzipayService.leer_respuesta(kr_answer)
+    applied = apply_izipay_answer(answer, f"izipay.ipn.{fields.get('kr-answer-type') or 'payment'}")
+    logger.info(
+        "izipay_ipn_received order=%s status=%s applied=%s",
+        (answer.get("orderDetails") or {}).get("orderId"), answer.get("orderStatus"), applied,
+    )
+    return PlainTextResponse(f"OK {answer.get('orderStatus') or ''}".strip())

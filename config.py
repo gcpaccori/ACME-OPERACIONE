@@ -15,6 +15,24 @@ class Settings(BaseSettings):
     # Culqi
     culqi_public_key: str = os.getenv("CULQI_PUBLIC_KEY", "")
     culqi_private_key: str = os.getenv("CULQI_PRIVATE_KEY", "")
+
+    # Izipay (API REST V4 con formulario incrustado). Las claves salen del Back
+    # Office Vendedor > Configuracion > Tienda > Claves de API REST. El modo
+    # (TEST o PRODUCTION) lo decide la contrasena que se ponga: la de test
+    # empieza con "testpassword_" y la de produccion con "prodpassword_".
+    izipay_username: str = os.getenv("IZIPAY_USERNAME", "")
+    izipay_password: str = os.getenv("IZIPAY_PASSWORD", "")
+    izipay_public_key: str = os.getenv("IZIPAY_PUBLIC_KEY", "")
+    izipay_hmac_key: str = os.getenv("IZIPAY_HMAC_KEY", "")
+    izipay_api_url: str = os.getenv("IZIPAY_API_URL", "https://api.micuentaweb.pe")
+    # Monto minimo por pedido en centimos. Izipay no impone el minimo de S/ 6
+    # de las ordenes de Culqi; se deja S/ 1 para no cobrar pedidos en cero.
+    izipay_min_order_centimos: int = int(os.getenv("IZIPAY_MIN_ORDER_CENTIMOS", "100"))
+
+    # Pasarela activa: "izipay" o "culqi". Si no se fija, se usa Izipay cuando
+    # sus claves estan configuradas y Culqi en caso contrario, asi desplegar
+    # este cambio sin las variables nuevas no rompe los cobros actuales.
+    payment_provider: str = os.getenv("PAYMENT_PROVIDER", "")
     
     # API
     api_host: str = os.getenv("API_HOST", "0.0.0.0")
@@ -58,5 +76,16 @@ class Settings(BaseSettings):
         if normalized in {"0", "false", "no", "off", "release", "production", "prod", ""}:
             return False
         return value
+
+
+def active_payment_provider() -> str:
+    """Pasarela con la que se abren los pagos nuevos."""
+    explicit = str(settings.payment_provider or "").strip().lower()
+    if explicit in ("izipay", "culqi"):
+        return explicit
+    if settings.izipay_username and settings.izipay_password and settings.izipay_public_key:
+        return "izipay"
+    return "culqi"
+
 
 settings = Settings()
