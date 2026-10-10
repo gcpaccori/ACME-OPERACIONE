@@ -335,38 +335,30 @@ def calculate_road_distance_km(lat1: float, lng1: float, lat2: float, lng2: floa
 
 
 def calculate_payment_processing_fee(amount: float) -> dict[str, Any]:
-    """Comision referencial CulqiOnline para pagos nacionales.
+    """Comision CulqiOnline con tarjeta nacional: tasa + fijo en USD, mas IGV.
 
-    Sobre el minimo, la comision se sube de forma que, despues de
-    que Culqi descuente su parte, llegue completo el monto original.
+    El minimo de S/ 3.50 de Culqi es solo para PagoEfectivo, asi que aqui no se
+    aplica. La comision se sube de forma que, despues de que Culqi descuente su
+    parte (con IGV), llegue completo el monto original.
     """
+    rate = max(0.0, float(settings.culqi_online_rate or 0.0))
+    fixed_pen = round(max(0.0, float(settings.culqi_online_fixed_usd or 0.0)) * max(0.0, float(settings.culqi_exchange_rate or 0.0)), 2)
+    igv = max(0.0, float(settings.igv_rate or 0.0))
+
     if amount <= 0:
         return {
             "fee": 0.0,
-            "rate": settings.culqi_online_rate,
-            "fixed": round(settings.culqi_online_fixed_usd * settings.culqi_exchange_rate, 2),
+            "rate": rate,
+            "fixed": fixed_pen,
             "provider": "culqi",
             "note": "Sin monto a cobrar.",
             "tax_amount": 0.0,
         }
 
-    rate = max(0.0, float(settings.culqi_online_rate or 0.0))
-    fixed_pen = round(max(0.0, float(settings.culqi_online_fixed_usd or 0.0)) * max(0.0, float(settings.culqi_exchange_rate or 0.0)), 2)
-    min_fee = max(0.0, float(settings.culqi_min_fee_pen or 0.0))
-
-    # El umbral es el monto donde la comision por tasa alcanza al minimo. Si no
-    # se fuerza por variable de entorno se deduce, para que las dos ramas de
-    # abajo se junten sin salto y no haya un tercer numero que mantener.
-    threshold = max(0.0, float(settings.culqi_min_threshold_pen or 0.0))
-    if threshold <= 0 and rate > 0:
-        threshold = max(0.0, (min_fee - fixed_pen) / rate)
-
-    if amount < threshold:
-        fee = max(min_fee, round(amount * rate + fixed_pen, 2))
-        note = f"CulqiOnline nacional: minimo S/ {min_fee:.2f} para montos menores a S/ {threshold:.2f}; comision inafecta a IGV."
-    else:
-        fee = round(((amount + fixed_pen) / max(0.0001, 1 - rate)) - amount, 2)
-        note = f"CulqiOnline nacional: {rate * 100:.2f}% + USD {settings.culqi_online_fixed_usd:.2f}; comision inafecta a IGV."
+    charged = (amount + fixed_pen * (1 + igv)) / max(0.0001, 1 - rate * (1 + igv))
+    fee = round(charged - amount, 2)
+    tax_amount = round(fee - fee / (1 + igv), 2)
+    note = f"CulqiOnline tarjeta nacional: {rate * 100:.2f}% + USD {settings.culqi_online_fixed_usd:.2f} + IGV."
 
     return {
         "fee": fee,
@@ -374,7 +366,7 @@ def calculate_payment_processing_fee(amount: float) -> dict[str, Any]:
         "fixed": fixed_pen,
         "provider": "culqi",
         "note": note,
-        "tax_amount": 0.0,
+        "tax_amount": tax_amount,
     }
 
 
