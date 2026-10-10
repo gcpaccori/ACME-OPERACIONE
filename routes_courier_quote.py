@@ -14,6 +14,7 @@ from services_courier_quote import (
     calculate_payment_processing_fee,
     calculate_road_distance_km,
     calculate_service_fee,
+    effective_service_fee_rate,
     reverse_geocode_point,
     search_geocode_address,
 )
@@ -173,7 +174,7 @@ def create_courier_quote(
 
         # 10. Tarifa de servicio ACME
         service_fee = calculate_service_fee(base)
-        service_fee_rate = float(settings.platform_service_fee_rate or 0.036)
+        service_fee_rate = effective_service_fee_rate(base, service_fee)
 
         # 11. Tip
         tip_amount = round(float(payload.tip_amount), 2)
@@ -195,7 +196,7 @@ def create_courier_quote(
             subtotal=subtotal,
             discount=discount,
             service_fee=service_fee,
-            service_fee_rate=0.036,
+            service_fee_rate=service_fee_rate,
             delivery_fee=delivery_fee,
             tip_amount=tip_amount,
             total=total,

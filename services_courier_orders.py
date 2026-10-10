@@ -169,7 +169,7 @@ class SupabaseOrderService:
             "discount_total": float(quote.get("discount", 0) or 0),
             "delivery_fee": float(quote.get("delivery_fee", 0) or 0),
             "service_fee": float(quote.get("service_fee", 0) or 0),
-            "service_fee_rate": float(quote.get("service_fee_rate", 0.036) or 0.036),
+            "service_fee_rate": float(quote.get("service_fee_rate", 0) or 0),
             "tip_amount": float(quote.get("tip_amount", 0) or 0),
             "tax_amount": float(quote.get("igv_amount", quote.get("tax_amount", 0)) or 0),
             "taxable_base": float(quote.get("taxable_base", 0) or 0),

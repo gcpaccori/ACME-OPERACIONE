@@ -502,5 +502,24 @@ def calculate_delivery_fee(distance_km: float, fulfillment_type: str) -> float:
 
 
 def calculate_service_fee(base_amount: float) -> float:
-    """Tarifa de servicio = 3.6% del subtotal neto."""
-    return round(base_amount * float(settings.platform_service_fee_rate or 0.036), 2)
+    """Tarifa de servicio por tramos sobre el subtotal neto de productos.
+
+    12% sobre los primeros S/ 100 y 8% sobre lo que exceda de S/ 100
+    (S/ 150 -> 12.00 + 4.00 = S/ 16.00).
+    """
+    base = max(0.0, float(base_amount))
+    threshold = float(settings.service_fee_tier_threshold_pen)
+    low_part = min(base, threshold)
+    high_part = max(0.0, base - threshold)
+    fee = (
+        low_part * float(settings.service_fee_rate_up_to_threshold)
+        + high_part * float(settings.service_fee_rate_above_threshold)
+    )
+    return round(fee, 2)
+
+
+def effective_service_fee_rate(base_amount: float, service_fee: float) -> float:
+    """Porcentaje efectivo cobrado (tarifa / base), para guardar en la orden."""
+    if base_amount <= 0:
+        return float(settings.service_fee_rate_up_to_threshold)
+    return round(service_fee / base_amount, 4)
