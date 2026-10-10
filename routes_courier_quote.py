@@ -172,22 +172,27 @@ def create_courier_quote(
         # 9. Base para tarifa de servicio
         base = subtotal - discount
 
-        # 10. Tarifa de servicio ACME
-        service_fee = calculate_service_fee(base)
-        service_fee_rate = effective_service_fee_rate(base, service_fee)
+        # 10. Tarifa ACME por tramos (12% hasta S/ 100, 8% sobre el exceso)
+        platform_fee = calculate_service_fee(base)
+        service_fee_rate = effective_service_fee_rate(base, platform_fee)
 
         # 11. Tip
         tip_amount = round(float(payload.tip_amount), 2)
 
-        # 12. IGV incluido y comision Culqi
-        taxable_total = round(base + service_fee + delivery_fee, 2)
+        # 12. IGV incluido y comision de la tarjeta
+        taxable_total = round(base + platform_fee + delivery_fee, 2)
         tax_breakdown = calculate_included_igv(taxable_total)
         payment_base = round(taxable_total + tip_amount, 2)
         processing = calculate_payment_processing_fee(payment_base)
-        payment_processing_fee = float(processing["fee"])
+        card_fee = float(processing["fee"])
 
-        # 13. Total
-        total = round(payment_base + payment_processing_fee, 2)
+        # 13. La comision de la tarjeta va dentro de la tarifa de servicio, una
+        # sola linea para el cliente. payment_processing_fee queda en 0 para
+        # que la web y la app no la muestren ni la sumen dos veces.
+        service_fee = round(platform_fee + card_fee, 2)
+        payment_processing_fee = 0.0
+        processing["note"] = f"Comision de tarjeta S/ {card_fee:.2f} incluida en la tarifa de servicio."
+        total = round(payment_base + card_fee, 2)
 
         # 14. Guardar cotizacion
         quote = supabase.save_quote(

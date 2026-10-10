@@ -45,10 +45,8 @@ class Settings(BaseSettings):
     # valor que estaba escrito a mano (87.72) no cuadraba con ninguno de los
     # dos y producia un salto en la comision justo en ese punto.
     culqi_min_threshold_pen: float = float(os.getenv("CULQI_MIN_THRESHOLD_PEN", "0"))
-    # La comision de Culqi es un costo del negocio, no del cliente: el cliente
-    # ya paga la tarifa de servicio. Cobrarle ademas la pasarela es
-    # cobrarle dos veces por lo mismo.
-    pass_culqi_fee_to_customer: bool = os.getenv("PASS_CULQI_FEE_TO_CUSTOMER", "False").lower() == "true"
+    # La comision de la tarjeta la paga el cliente, pero no como linea aparte:
+    # se suma dentro de la "Tarifa de servicio" (ver routes_courier_quote.py).
 
     @field_validator("debug", "skip_legacy_db_init", mode="before")
     @classmethod

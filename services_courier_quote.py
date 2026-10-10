@@ -335,14 +335,18 @@ def calculate_road_distance_km(lat1: float, lng1: float, lat2: float, lng2: floa
 
 
 def calculate_payment_processing_fee(amount: float) -> dict[str, Any]:
-    """Comision referencial CulqiOnline para pagos nacionales."""
-    if not settings.pass_culqi_fee_to_customer or amount <= 0:
+    """Comision referencial CulqiOnline para pagos nacionales.
+
+    Sobre el minimo, la comision se sube de forma que, despues de
+    que Culqi descuente su parte, llegue completo el monto original.
+    """
+    if amount <= 0:
         return {
             "fee": 0.0,
             "rate": settings.culqi_online_rate,
             "fixed": round(settings.culqi_online_fixed_usd * settings.culqi_exchange_rate, 2),
             "provider": "culqi",
-            "note": "Comision Culqi absorbida por el comercio.",
+            "note": "Sin monto a cobrar.",
             "tax_amount": 0.0,
         }
 
