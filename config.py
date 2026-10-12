@@ -15,6 +15,60 @@ class Settings(BaseSettings):
     # Culqi
     culqi_public_key: str = os.getenv("CULQI_PUBLIC_KEY", "")
     culqi_private_key: str = os.getenv("CULQI_PRIVATE_KEY", "")
+
+    # Izipay (API REST V4 con formulario incrustado). Las claves salen del Back
+    # Office Vendedor > Configuracion > Tienda > Claves de API REST. El modo
+    # (TEST o PRODUCTION) lo decide la contrasena que se ponga: la de test
+    # empieza con "testpassword_" y la de produccion con "prodpassword_".
+    izipay_username: str = os.getenv("IZIPAY_USERNAME", "")
+    izipay_password: str = os.getenv("IZIPAY_PASSWORD", "")
+    izipay_public_key: str = os.getenv("IZIPAY_PUBLIC_KEY", "")
+    izipay_hmac_key: str = os.getenv("IZIPAY_HMAC_KEY", "")
+    izipay_api_url: str = os.getenv("IZIPAY_API_URL", "https://api.micuentaweb.pe")
+    # Monto minimo por pedido en centimos. Izipay no impone el minimo de S/ 6
+    # de las ordenes de Culqi; se deja S/ 1 para no cobrar pedidos en cero.
+    izipay_min_order_centimos: int = int(os.getenv("IZIPAY_MIN_ORDER_CENTIMOS", "100"))
+    # Pagina publica de demostracion del boton de Izipay (/pago-izipay en la
+    # web), para que Izipay valide el sitio sin cambiar la pasarela del carrito.
+    # Cobra un monto fijo que no corresponde a ningun pedido.
+    # Con las claves de TEST, cualquiera puede "pagar" con las tarjetas de
+    # prueba publicas de Izipay. En produccion esos pagos no deben liberar el
+    # pedido al negocio; solo se aceptan si esto esta activo (entornos de prueba).
+    izipay_accept_test_payments: bool = os.getenv("IZIPAY_ACCEPT_TEST_PAYMENTS", "").strip().lower() in ("1", "true", "yes")
+    izipay_demo_enabled: bool = os.getenv("IZIPAY_DEMO_ENABLED", "").strip().lower() in ("1", "true", "yes")
+    izipay_demo_amount_centimos: int = int(os.getenv("IZIPAY_DEMO_AMOUNT_CENTIMOS", "100"))
+
+    # SDK de Izipay (boton de pagos de Punto Web): tarjeta, Yape, Plin y QR.
+    # Las claves salen del panel de comercio (sandbox-panel.izipay.pe para
+    # pruebas, panel.izipay.pe en produccion) > Desarrolladores > Claves.
+    izipay_sdk_merchant_code: str = os.getenv("IZIPAY_SDK_MERCHANT_CODE", "")
+    # "Clave API del nuevo boton de pagos": solo sirve para pedir el token de sesion.
+    izipay_sdk_api_key: str = os.getenv("IZIPAY_SDK_API_KEY", "")
+    # "Clave Hash": firma las respuestas del checkout y de la IPN.
+    izipay_sdk_hash_key: str = os.getenv("IZIPAY_SDK_HASH_KEY", "")
+    # "Clave publica IZIPAY" (RSA): la usa el checkout en el navegador.
+    izipay_sdk_rsa_public_key: str = os.getenv("IZIPAY_SDK_RSA_PUBLIC_KEY", "")
+    # "sandbox" o "production".
+    izipay_sdk_env: str = os.getenv("IZIPAY_SDK_ENV", "sandbox")
+    # URL publica de /api/webhooks/izipay-sdk; Izipay la recibe en cada pago.
+    izipay_sdk_ipn_url: str = os.getenv("IZIPAY_SDK_IPN_URL", "")
+    # RUC del comercio: Izipay lo pide para las devoluciones.
+    izipay_sdk_ruc: str = os.getenv("IZIPAY_SDK_RUC", "")
+    izipay_sdk_pay_methods: str = os.getenv("IZIPAY_SDK_PAY_METHODS", "CARD,YAPE_CODE,PAGO_PUSH,QR")
+    # Izipay exige direccion de facturacion; los pedidos no la guardan.
+    izipay_sdk_billing_street: str = os.getenv("IZIPAY_SDK_BILLING_STREET", "Jr Virrey Toledo 100")
+    izipay_sdk_billing_city: str = os.getenv("IZIPAY_SDK_BILLING_CITY", "Huancavelica")
+    izipay_sdk_billing_state: str = os.getenv("IZIPAY_SDK_BILLING_STATE", "Huancavelica")
+    izipay_sdk_billing_postal_code: str = os.getenv("IZIPAY_SDK_BILLING_POSTAL_CODE", "09001")
+
+    # Pasarela activa: "izipay_sdk", "izipay" o "culqi". Si no se fija, se usa
+    # la primera que tenga sus claves configuradas en ese orden, y Culqi si
+    # ninguna las tiene: desplegar sin las variables nuevas no rompe los cobros.
+    payment_provider: str = os.getenv("PAYMENT_PROVIDER", "")
+    # Comision de Izipay por tarjeta nacional, sin IGV (el IGV se suma aparte).
+    # 3.44% es la tarifa publicada; el fijo por operacion depende del contrato.
+    izipay_card_rate: float = float(os.getenv("IZIPAY_CARD_RATE", "0.0344"))
+    izipay_card_fixed_pen: float = float(os.getenv("IZIPAY_CARD_FIXED_PEN", "0"))
     
     # API
     api_host: str = os.getenv("API_HOST", "0.0.0.0")
@@ -55,5 +109,23 @@ class Settings(BaseSettings):
         if normalized in {"0", "false", "no", "off", "release", "production", "prod", ""}:
             return False
         return value
+
+
+def active_payment_provider() -> str:
+    """Pasarela con la que se abren los pagos nuevos."""
+    explicit = str(settings.payment_provider or "").strip().lower()
+    if explicit in ("izipay_sdk", "izipay", "culqi"):
+        return explicit
+    if (
+        settings.izipay_sdk_merchant_code
+        and settings.izipay_sdk_api_key
+        and settings.izipay_sdk_hash_key
+        and settings.izipay_sdk_rsa_public_key
+    ):
+        return "izipay_sdk"
+    if settings.izipay_username and settings.izipay_password and settings.izipay_public_key:
+        return "izipay"
+    return "culqi"
+
 
 settings = Settings()

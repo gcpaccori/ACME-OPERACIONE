@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr, Field
-from typing import Optional, List
+from typing import Any, Dict, Optional, List
 from datetime import datetime
 
 # ============ PRODUCTOS ============
@@ -114,6 +114,58 @@ class CourierPaymentOrderResponse(BaseModel):
     courier_order_id: str
     payment_id: str
     monto_centimos: int
+    mensaje: str
+    # Pasarela con la que se abrio el pago: "culqi" o "izipay". Con Izipay
+    # vienen tambien el formToken y la clave publica para el formulario.
+    provider: str = "culqi"
+    form_token: Optional[str] = None
+    public_key: Optional[str] = None
+    mode: Optional[str] = None
+    # SDK de Izipay ("izipay_sdk"): lo que necesita el checkout en el navegador.
+    izipay_checkout: Optional[Dict[str, Any]] = None
+
+
+class IzipayConfirmRequest(BaseModel):
+    """Respuesta firmada que Izipay entrega al navegador (KR.onSubmit)."""
+    order_id: str = Field(..., min_length=1)
+    kr_answer: str = Field(..., min_length=2)
+    kr_hash: str = Field(..., min_length=10)
+    kr_hash_key: Optional[str] = None
+
+
+class IzipaySdkConfirmRequest(BaseModel):
+    """Respuesta firmada que el SDK de Izipay entrega al navegador."""
+    order_id: str = Field(..., min_length=1)
+    payload_http: str = Field(..., min_length=2)
+    signature: str = Field(..., min_length=10)
+
+
+class IzipayDemoResponse(BaseModel):
+    """Formulario de Izipay para la pagina de demostracion (sin pedido)."""
+    order_id: str
+    form_token: str
+    public_key: str
+    mode: str
+    monto_centimos: int
+
+
+class IzipayDemoConfirmRequest(BaseModel):
+    kr_answer: str = Field(..., min_length=2)
+    kr_hash: str = Field(..., min_length=10)
+    kr_hash_key: Optional[str] = None
+
+
+class IzipayDemoConfirmResponse(BaseModel):
+    exito: bool
+    payment_status: str
+    mensaje: str
+
+
+class IzipayConfirmResponse(BaseModel):
+    exito: bool
+    courier_order_id: str
+    payment_status: str
+    transaccion_id: Optional[str] = None
     mensaje: str
 
 class CourierPaymentChargeRequest(BaseModel):

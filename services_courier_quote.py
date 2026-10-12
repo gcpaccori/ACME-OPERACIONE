@@ -8,7 +8,7 @@ import math
 
 import requests
 
-from config import settings
+from config import active_payment_provider, settings
 from services_courier_tariffs import TariffZoneOverride, extract_zone_code
 
 logger = logging.getLogger(__name__)
@@ -335,14 +335,22 @@ def calculate_road_distance_km(lat1: float, lng1: float, lat2: float, lng2: floa
 
 
 def calculate_payment_processing_fee(amount: float) -> dict[str, Any]:
-    """Comision CulqiOnline con tarjeta nacional: tasa + fijo en USD, mas IGV.
+    """Comision de la pasarela activa para una tarjeta nacional, mas IGV.
 
-    El minimo de S/ 3.50 de Culqi es solo para PagoEfectivo, asi que aqui no se
-    aplica. La comision se sube de forma que, despues de que Culqi descuente su
+    Izipay: tasa (y fijo en soles si el contrato lo tiene). Culqi: tasa + fijo
+    en USD; su minimo de S/ 3.50 es solo de PagoEfectivo y aqui no se aplica.
+    La comision se sube de forma que, despues de que la pasarela descuente su
     parte (con IGV), llegue completo el monto original.
     """
-    rate = max(0.0, float(settings.culqi_online_rate or 0.0))
-    fixed_pen = round(max(0.0, float(settings.culqi_online_fixed_usd or 0.0)) * max(0.0, float(settings.culqi_exchange_rate or 0.0)), 2)
+    provider = active_payment_provider()
+    if provider in ("izipay", "izipay_sdk"):
+        rate = max(0.0, float(settings.izipay_card_rate or 0.0))
+        fixed_pen = round(max(0.0, float(settings.izipay_card_fixed_pen or 0.0)), 2)
+        label = f"Izipay tarjeta nacional: {rate * 100:.2f}%" + (f" + S/ {fixed_pen:.2f}" if fixed_pen else "") + " + IGV."
+    else:
+        rate = max(0.0, float(settings.culqi_online_rate or 0.0))
+        fixed_pen = round(max(0.0, float(settings.culqi_online_fixed_usd or 0.0)) * max(0.0, float(settings.culqi_exchange_rate or 0.0)), 2)
+        label = f"CulqiOnline tarjeta nacional: {rate * 100:.2f}% + USD {settings.culqi_online_fixed_usd:.2f} + IGV."
     igv = max(0.0, float(settings.igv_rate or 0.0))
 
     if amount <= 0:
@@ -350,7 +358,7 @@ def calculate_payment_processing_fee(amount: float) -> dict[str, Any]:
             "fee": 0.0,
             "rate": rate,
             "fixed": fixed_pen,
-            "provider": "culqi",
+            "provider": provider,
             "note": "Sin monto a cobrar.",
             "tax_amount": 0.0,
         }
@@ -358,14 +366,13 @@ def calculate_payment_processing_fee(amount: float) -> dict[str, Any]:
     charged = (amount + fixed_pen * (1 + igv)) / max(0.0001, 1 - rate * (1 + igv))
     fee = round(charged - amount, 2)
     tax_amount = round(fee - fee / (1 + igv), 2)
-    note = f"CulqiOnline tarjeta nacional: {rate * 100:.2f}% + USD {settings.culqi_online_fixed_usd:.2f} + IGV."
 
     return {
         "fee": fee,
         "rate": rate,
         "fixed": fixed_pen,
-        "provider": "culqi",
-        "note": note,
+        "provider": provider,
+        "note": label,
         "tax_amount": tax_amount,
     }
 

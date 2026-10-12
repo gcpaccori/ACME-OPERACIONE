@@ -1,6 +1,7 @@
 from concurrent.futures import ThreadPoolExecutor
 import logging
 import time
+import uuid
 
 from fastapi import APIRouter, Header, HTTPException
 
@@ -11,11 +12,40 @@ from models import (
     CourierPaymentOrderResponse,
     CourierPaymentSyncRequest,
     CourierPaymentSyncResponse,
+    IzipayConfirmRequest,
+    IzipayConfirmResponse,
+    IzipayDemoConfirmRequest,
+    IzipayDemoConfirmResponse,
+    IzipayDemoResponse,
+    IzipaySdkConfirmRequest,
 )
+from config import active_payment_provider, settings
 from services_courier_payments import SupabaseCourierError, SupabaseCourierPayments
 from services_culqi import CulqiService
+from services_izipay import (
+    IZIPAY_MAX_ORDER_CENTIMOS,
+    IzipayService,
+    IzipayUnavailable,
+    courier_order_id_from_izipay,
+    summarize_answer,
+)
+from services_izipay_sdk import (
+    IZIPAY_SDK_MAX_ORDER_CENTIMOS,
+    IzipaySdkService,
+    IzipaySdkUnavailable,
+    izipay_order_number,
+    summarize_payload,
+)
 from services_supabase_auth import SupabaseAuthError, verify_supabase_user
-from routes_webhooks import CulqiUnavailable, sync_culqi_order
+from routes_webhooks import (
+    CulqiUnavailable,
+    apply_izipay_answer,
+    apply_izipay_sdk_payload,
+    izipay_test_payment_blocked,
+    sync_culqi_order,
+    sync_izipay_order,
+    sync_izipay_sdk_order,
+)
 
 
 router = APIRouter(prefix="/api/courier/payments", tags=["courier-payments"])
@@ -152,6 +182,29 @@ def create_courier_payment_order(
         amount = order_amount_centimos(order)
         if amount <= 0:
             raise HTTPException(status_code=400, detail="El pedido no tiene un monto valido para cobrar.")
+        provider = active_payment_provider()
+        if provider == "izipay_sdk":
+            return _open_izipay_sdk_payment(
+                supabase,
+                order,
+                token=token,
+                email=email,
+                name=name,
+                phone=payload.telefono_cliente or phone,
+                amount=amount,
+                started_at=started_at,
+            )
+        if provider == "izipay":
+            return _open_izipay_payment(
+                supabase,
+                order,
+                token=token,
+                email=email,
+                name=name,
+                phone=payload.telefono_cliente or phone,
+                amount=amount,
+                started_at=started_at,
+            )
         if amount < CULQI_MIN_ORDER_AMOUNT:
             raise HTTPException(
                 status_code=400,
@@ -251,6 +304,363 @@ def create_courier_payment_order(
         raise
     except SupabaseCourierError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+def _open_izipay_payment(
+    supabase: SupabaseCourierPayments,
+    order: dict,
+    *,
+    token: str,
+    email: str,
+    name: str,
+    phone: str | None,
+    amount: int,
+    started_at: float,
+) -> CourierPaymentOrderResponse:
+    """
+    Abre el pago del pedido en Izipay: crea el formToken con el total guardado
+    del pedido. El pedido sigue en espera de pago hasta que Izipay confirme
+    (respuesta firmada del navegador, IPN o consulta a Order/Get).
+    """
+    order_id = str(order["id"])
+    if amount < settings.izipay_min_order_centimos:
+        raise HTTPException(
+            status_code=400,
+            detail=f"El monto minimo para pagar en linea es S/ {settings.izipay_min_order_centimos / 100:.2f}.",
+        )
+    if amount > IZIPAY_MAX_ORDER_CENTIMOS:
+        raise HTTPException(status_code=400, detail="El monto del pedido excede el limite permitido para pagos en linea.")
+
+    # Si un intento anterior ya se pago (por ejemplo, el navegador se cerro
+    # antes de volver), no se abre otro: se aplica el pago y se avisa.
+    try:
+        if sync_izipay_order(order_id) == "paid":
+            raise HTTPException(status_code=409, detail="Este pedido ya esta pagado.")
+    except IzipayUnavailable as exc:
+        logger.warning("izipay_precheck_unavailable order_id=%s: %s", order_id, exc)
+
+    result = izipay_service().crear_form_token(
+        courier_order_id=order_id,
+        monto=amount,
+        email=email,
+        nombre=name,
+        telefono=phone,
+        referencia_cliente=str(order.get("customer_id") or "") or None,
+    )
+    if not result.get("exito"):
+        status_code = 400 if result.get("error_tipo") in ("validation", "parameter_error") else 502
+        raise HTTPException(status_code=status_code, detail=result.get("mensaje", "No se pudo abrir el pago con Izipay."))
+
+    payment_method_id = supabase.get_online_payment_method_id(token)
+    existing = supabase.find_pending_payment(order_id, token, provider="izipay")
+    payment_id = supabase.upsert_pending_payment(
+        order,
+        payment_method_id=payment_method_id,
+        external_reference=result["order_id"],
+        bearer_token=token,
+        provider="izipay",
+    )
+    jobs = [
+        lambda: supabase.update_order_payment(
+            order_id,
+            payment_method_id=payment_method_id,
+            payment_status="pending",
+            bearer_token=token,
+        )
+    ]
+    # Cada clic en "Pagar" pide un formToken nuevo; el intento se registra una
+    # sola vez para no llenar el historial.
+    if not existing:
+        jobs.append(
+            lambda: supabase.insert_transaction(
+                payment_id=payment_id,
+                transaction_type="authorization",
+                amount=float(order.get("total") or 0),
+                status="pending",
+                provider_transaction_id=result["order_id"],
+                request_json={"order_id": order_id, "amount": amount, "currency": "PEN", "provider": "izipay"},
+                response_json={"mode": result.get("mode")},
+                bearer_token=token,
+            )
+        )
+    run_parallel(*jobs)
+    logger.info(
+        "courier_payment_izipay_ok order_id=%s mode=%s elapsed_ms=%s",
+        order_id,
+        result.get("mode"),
+        int((time.perf_counter() - started_at) * 1000),
+    )
+    return CourierPaymentOrderResponse(
+        order_id=result["order_id"],
+        courier_order_id=order_id,
+        payment_id=payment_id,
+        monto_centimos=amount,
+        mensaje=result.get("mensaje", "Formulario Izipay listo"),
+        provider="izipay",
+        form_token=result["form_token"],
+        public_key=result["public_key"],
+        mode=result.get("mode"),
+    )
+
+
+def izipay_service() -> IzipayService:
+    return IzipayService()
+
+
+def izipay_sdk_service() -> IzipaySdkService:
+    return IzipaySdkService()
+
+
+def _open_izipay_sdk_payment(
+    supabase: SupabaseCourierPayments,
+    order: dict,
+    *,
+    token: str,
+    email: str,
+    name: str,
+    phone: str | None,
+    amount: int,
+    started_at: float,
+) -> CourierPaymentOrderResponse:
+    """
+    Abre el pago del pedido con el SDK de Izipay (tarjeta, Yape, Plin, QR): pide
+    el token de sesion por el total guardado del pedido y devuelve la
+    configuracion del checkout. El pedido sigue en espera de pago hasta que
+    Izipay confirme (respuesta firmada del navegador, IPN o consulta de orden).
+    """
+    order_id = str(order["id"])
+    if amount < settings.izipay_min_order_centimos:
+        raise HTTPException(
+            status_code=400,
+            detail=f"El monto minimo para pagar en linea es S/ {settings.izipay_min_order_centimos / 100:.2f}.",
+        )
+    if amount > IZIPAY_SDK_MAX_ORDER_CENTIMOS:
+        raise HTTPException(status_code=400, detail="El monto del pedido excede el limite permitido para pagos en linea.")
+
+    # Si un intento anterior ya se pago (por ejemplo, el navegador se cerro
+    # antes de volver), no se abre otro: se aplica el pago y se avisa.
+    service = izipay_sdk_service()
+    try:
+        if sync_izipay_sdk_order(order_id) == "paid":
+            raise HTTPException(status_code=409, detail="Este pedido ya esta pagado.")
+    except IzipaySdkUnavailable as exc:
+        logger.warning("izipay_sdk_precheck_unavailable order_id=%s: %s", order_id, exc)
+
+    result = service.crear_checkout(
+        courier_order_id=order_id,
+        monto=amount,
+        email=email,
+        nombre=name,
+        telefono=phone,
+        cliente_id=str(order.get("customer_id") or "") or None,
+    )
+    if not result.get("exito"):
+        status_code = 400 if result.get("error_tipo") == "validation" else 502
+        raise HTTPException(status_code=status_code, detail=result.get("mensaje", "No se pudo abrir el pago con Izipay."))
+
+    payment_method_id = supabase.get_online_payment_method_id(token)
+    existing = supabase.find_pending_payment(order_id, token, provider="izipay_sdk")
+    payment_id = supabase.upsert_pending_payment(
+        order,
+        payment_method_id=payment_method_id,
+        external_reference=result["order_number"],
+        bearer_token=token,
+        provider="izipay_sdk",
+    )
+    jobs = [
+        lambda: supabase.update_order_payment(
+            order_id,
+            payment_method_id=payment_method_id,
+            payment_status="pending",
+            bearer_token=token,
+        )
+    ]
+    # Cada clic en "Pagar" pide un token nuevo; el intento se registra una
+    # sola vez para no llenar el historial.
+    if not existing:
+        jobs.append(
+            lambda: supabase.insert_transaction(
+                payment_id=payment_id,
+                transaction_type="authorization",
+                amount=float(order.get("total") or 0),
+                status="pending",
+                provider_transaction_id=result["order_number"],
+                request_json={"order_id": order_id, "amount": amount, "currency": "PEN", "provider": "izipay_sdk"},
+                response_json={"mode": result.get("mode")},
+                bearer_token=token,
+            )
+        )
+    run_parallel(*jobs)
+    logger.info(
+        "courier_payment_izipay_sdk_ok order_id=%s mode=%s elapsed_ms=%s",
+        order_id,
+        result.get("mode"),
+        int((time.perf_counter() - started_at) * 1000),
+    )
+    return CourierPaymentOrderResponse(
+        order_id=result["order_number"],
+        courier_order_id=order_id,
+        payment_id=payment_id,
+        monto_centimos=amount,
+        mensaje=result.get("mensaje", "Checkout Izipay listo"),
+        provider="izipay_sdk",
+        mode=result.get("mode"),
+        izipay_checkout={
+            "authorization": result["authorization"],
+            "key_rsa": result["key_rsa"],
+            "script_url": result["script_url"],
+            "config": result["config"],
+        },
+    )
+
+
+@router.post("/izipay-sdk/confirm", response_model=IzipayConfirmResponse)
+def confirm_izipay_sdk_payment(payload: IzipaySdkConfirmRequest):
+    """
+    Recibe la respuesta que el SDK de Izipay entrega al navegador al terminar
+    el pago (payloadHttp y signature) y, si la firma es valida, la aplica al
+    pedido. Igual que /izipay/confirm, no pide sesion: la firma prueba que la
+    respuesta la genero Izipay.
+    """
+    signed = izipay_sdk_service().leer_firmado(payload.payload_http, payload.signature)
+    if signed is None:
+        raise HTTPException(status_code=400, detail="La respuesta de pago no tiene una firma valida.")
+
+    resumen = summarize_payload(signed)
+    if resumen.get("order_number") != izipay_order_number(payload.order_id) or (
+        resumen.get("courier_order_id") and resumen.get("courier_order_id") != payload.order_id
+    ):
+        raise HTTPException(status_code=400, detail="La respuesta de pago no corresponde a este pedido.")
+
+    applied = apply_izipay_sdk_payload(signed, "izipay_sdk.browser")
+    status = applied or resumen.get("status") or "pending"
+    if resumen.get("status") == "paid" and applied != "paid":
+        # Firma valida pero el monto no coincide con el pedido, o no se pudo
+        # guardar. La IPN y la sincronizacion lo vuelven a intentar.
+        logger.error("izipay_sdk_confirm_not_applied order_id=%s resumen=%s", payload.order_id, resumen)
+        return IzipayConfirmResponse(
+            exito=False,
+            courier_order_id=payload.order_id,
+            payment_status="pending",
+            transaccion_id=resumen.get("unique_id"),
+            mensaje="Recibimos tu pago y lo estamos validando.",
+        )
+
+    return IzipayConfirmResponse(
+        exito=status == "paid",
+        courier_order_id=payload.order_id,
+        payment_status=status,
+        transaccion_id=resumen.get("unique_id"),
+        mensaje="Pago confirmado" if status == "paid" else (resumen.get("message") or "El pago no se completo."),
+    )
+
+
+@router.post("/izipay/confirm", response_model=IzipayConfirmResponse)
+def confirm_izipay_payment(payload: IzipayConfirmRequest):
+    """
+    Recibe la respuesta que Izipay entrega al navegador al terminar el pago
+    (kr-answer y kr-hash) y, si la firma es valida, la aplica al pedido.
+
+    No pide sesion: la firma HMAC-SHA-256 prueba que la respuesta la genero
+    Izipay, y la pagina de pago de la app movil no tiene la sesion del
+    cliente. La IPN confirma lo mismo por su lado; esto solo acelera que el
+    pedido salga a operaciones.
+    """
+    service = izipay_service()
+    if not service.verificar_firma(payload.kr_answer, payload.kr_hash, payload.kr_hash_key or "sha256_hmac"):
+        raise HTTPException(status_code=400, detail="La respuesta de pago no tiene una firma valida.")
+
+    answer = IzipayService.leer_respuesta(payload.kr_answer)
+    resumen = summarize_answer(answer)
+    courier_order_id = courier_order_id_from_izipay(resumen.get("order_id"))
+    if courier_order_id != payload.order_id:
+        raise HTTPException(status_code=400, detail="La respuesta de pago no corresponde a este pedido.")
+
+    applied = apply_izipay_answer(answer, "izipay.browser")
+    status = applied or resumen.get("status") or "pending"
+    if resumen.get("status") == "paid" and izipay_test_payment_blocked(resumen):
+        return IzipayConfirmResponse(
+            exito=False,
+            courier_order_id=payload.order_id,
+            payment_status="pending",
+            transaccion_id=resumen.get("transaction_uuid"),
+            mensaje="Izipay esta en modo de prueba: este pago no confirma el pedido.",
+        )
+    if resumen.get("status") == "paid" and applied != "paid":
+        # Firma valida pero el monto no coincide con el pedido, o no se pudo
+        # guardar. La IPN y la sincronizacion lo vuelven a intentar.
+        logger.error("izipay_confirm_not_applied order_id=%s resumen=%s", payload.order_id, resumen)
+        return IzipayConfirmResponse(
+            exito=False,
+            courier_order_id=payload.order_id,
+            payment_status="pending",
+            transaccion_id=resumen.get("transaction_uuid"),
+            mensaje="Recibimos tu pago y lo estamos validando.",
+        )
+
+    return IzipayConfirmResponse(
+        exito=status == "paid",
+        courier_order_id=payload.order_id,
+        payment_status=status,
+        transaccion_id=resumen.get("transaction_uuid"),
+        mensaje="Pago confirmado" if status == "paid" else (resumen.get("error_message") or "El pago no se completo."),
+    )
+
+
+IZIPAY_DEMO_ORDER_PREFIX = "demo-"
+
+
+def _izipay_demo_service() -> IzipayService:
+    service = izipay_service()
+    if not settings.izipay_demo_enabled or not service.configured:
+        raise HTTPException(status_code=404, detail="Not Found")
+    return service
+
+
+@router.post("/izipay/demo", response_model=IzipayDemoResponse)
+def create_izipay_demo_payment():
+    """
+    Formulario de Izipay por un monto fijo, sin pedido ni sesion, para la
+    pagina publica /pago-izipay que Izipay revisa al validar el sitio. El
+    orderId no lleva el prefijo de pedidos, asi que la IPN no lo aplica a
+    nada. Solo responde con IZIPAY_DEMO_ENABLED.
+    """
+    service = _izipay_demo_service()
+    result = service.crear_form_token(
+        courier_order_id="demo",
+        monto=settings.izipay_demo_amount_centimos,
+        email="demo@acmepedidos.com",
+        nombre="Cliente Demo",
+        telefono=None,
+        referencia_cliente=None,
+        order_id=f"{IZIPAY_DEMO_ORDER_PREFIX}{uuid.uuid4().hex[:12]}",
+    )
+    if not result.get("exito"):
+        raise HTTPException(status_code=502, detail=result.get("mensaje") or "Izipay no respondio.")
+    return IzipayDemoResponse(
+        order_id=result["order_id"],
+        form_token=result["form_token"],
+        public_key=result["public_key"],
+        mode=result["mode"],
+        monto_centimos=result["monto_centimos"],
+    )
+
+
+@router.post("/izipay/demo/confirm", response_model=IzipayDemoConfirmResponse)
+def confirm_izipay_demo_payment(payload: IzipayDemoConfirmRequest):
+    """Verifica la firma de la respuesta de la demo y dice si se pago. No guarda nada."""
+    service = _izipay_demo_service()
+    if not service.verificar_firma(payload.kr_answer, payload.kr_hash, payload.kr_hash_key or "sha256_hmac"):
+        raise HTTPException(status_code=400, detail="La respuesta de pago no tiene una firma valida.")
+    resumen = summarize_answer(IzipayService.leer_respuesta(payload.kr_answer))
+    if not str(resumen.get("order_id") or "").startswith(IZIPAY_DEMO_ORDER_PREFIX):
+        raise HTTPException(status_code=400, detail="La respuesta no es de la pagina de demostracion.")
+    status = resumen.get("status") or "pending"
+    return IzipayDemoConfirmResponse(
+        exito=status == "paid",
+        payment_status=status,
+        mensaje="Pago aprobado" if status == "paid" else (resumen.get("error_message") or "El pago no se completo."),
+    )
 
 
 @router.post("/charge", response_model=CourierPaymentChargeResponse)
@@ -408,16 +818,29 @@ def sync_courier_payment(
         status = str(order.get("payment_status") or "pending")
 
         if status != "paid":
-            pending = supabase.find_pending_payment(order_id, token)
-            reference = str((pending or {}).get("external_reference") or "").strip()
-            if reference.startswith("ord_"):
+            applied = None
+            # Order/Get responde "sin transacciones" a los pedidos que nunca se
+            # abrieron en Izipay, asi que se puede consultar siempre.
+            if izipay_sdk_service().configured:
                 try:
-                    applied = sync_culqi_order(reference)
-                except CulqiUnavailable as exc:
-                    logger.warning("courier_payment_sync_unavailable order_id=%s: %s", order_id, exc)
-                    applied = None
-                if applied:
-                    status = applied
+                    applied = sync_izipay_sdk_order(order_id)
+                except IzipaySdkUnavailable as exc:
+                    logger.warning("courier_payment_sync_izipay_sdk_unavailable order_id=%s: %s", order_id, exc)
+            if not applied and izipay_service().configured:
+                try:
+                    applied = sync_izipay_order(order_id)
+                except IzipayUnavailable as exc:
+                    logger.warning("courier_payment_sync_izipay_unavailable order_id=%s: %s", order_id, exc)
+            if not applied:
+                pending = supabase.find_pending_payment(order_id, token)
+                reference = str((pending or {}).get("external_reference") or "").strip()
+                if reference.startswith("ord_"):
+                    try:
+                        applied = sync_culqi_order(reference)
+                    except CulqiUnavailable as exc:
+                        logger.warning("courier_payment_sync_unavailable order_id=%s: %s", order_id, exc)
+            if applied:
+                status = applied
         else:
             # Por si el pago quedo registrado pero el pedido no alcanzo a salir.
             _release_paid_order(supabase, order_id, token)
