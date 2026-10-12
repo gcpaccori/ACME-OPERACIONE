@@ -126,7 +126,7 @@ class SupabaseCourierPayments:
             _ONLINE_PAYMENT_METHOD_ID_CACHE = None
             return None
 
-        preferred_codes = ("culqi", "culqi_online", "card_online", "yape")
+        preferred_codes = ("izipay", "culqi", "culqi_online", "card_online", "yape")
         by_code = {str(row.get("code", "")).lower(): row for row in rows}
         for code in preferred_codes:
             if code in by_code:
@@ -137,7 +137,12 @@ class SupabaseCourierPayments:
         _ONLINE_PAYMENT_METHOD_ID_LOADED = True
         return _ONLINE_PAYMENT_METHOD_ID_CACHE
 
-    def find_pending_payment(self, order_id: str, bearer_token: str | None = None) -> dict[str, Any] | None:
+    def find_pending_payment(
+        self,
+        order_id: str,
+        bearer_token: str | None = None,
+        provider: str = "culqi",
+    ) -> dict[str, Any] | None:
         rows = self._request(
             "GET",
             "payments",
@@ -145,7 +150,7 @@ class SupabaseCourierPayments:
             params={
                 "select": "id,order_id,status,external_reference,payment_method_id",
                 "order_id": f"eq.{order_id}",
-                "provider": "eq.culqi",
+                "provider": f"eq.{provider}",
                 "status": "eq.pending",
                 "order": "requested_at.desc",
                 "limit": "1",
@@ -160,9 +165,10 @@ class SupabaseCourierPayments:
         payment_method_id: str | None,
         external_reference: str,
         bearer_token: str | None = None,
+        provider: str = "culqi",
     ) -> str:
         now = datetime.now(timezone.utc).isoformat()
-        existing = self.find_pending_payment(str(order["id"]), bearer_token)
+        existing = self.find_pending_payment(str(order["id"]), bearer_token, provider)
         payload = {
             "order_id": order["id"],
             "customer_id": order.get("customer_id"),
@@ -170,7 +176,7 @@ class SupabaseCourierPayments:
             "amount": float(order.get("total") or 0),
             "currency": order.get("currency") or "PEN",
             "status": "pending",
-            "provider": "culqi",
+            "provider": provider,
             "external_reference": external_reference,
             "requested_at": now,
             "authorized_at": None,

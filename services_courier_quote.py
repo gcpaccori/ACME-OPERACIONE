@@ -8,7 +8,7 @@ import math
 
 import requests
 
-from config import settings
+from config import active_payment_provider, settings
 from services_courier_tariffs import TariffZoneOverride, extract_zone_code
 
 logger = logging.getLogger(__name__)
@@ -335,7 +335,19 @@ def calculate_road_distance_km(lat1: float, lng1: float, lat2: float, lng2: floa
 
 
 def calculate_payment_processing_fee(amount: float) -> dict[str, Any]:
-    """Comision referencial CulqiOnline para pagos nacionales."""
+    """Comision referencial de la pasarela para pagos nacionales."""
+    provider = active_payment_provider()
+    if provider in ("izipay", "izipay_sdk"):
+        # La comision de Izipay la asume el comercio: no se suma al total ni
+        # tiene minimo por compra como el de Culqi.
+        return {
+            "fee": 0.0,
+            "rate": 0.0,
+            "fixed": 0.0,
+            "provider": provider,
+            "note": "Comision Izipay absorbida por el comercio.",
+            "tax_amount": 0.0,
+        }
     if not settings.pass_culqi_fee_to_customer or amount <= 0:
         return {
             "fee": 0.0,
