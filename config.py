@@ -28,6 +28,15 @@ class Settings(BaseSettings):
     # Monto minimo por pedido en centimos. Izipay no impone el minimo de S/ 6
     # de las ordenes de Culqi; se deja S/ 1 para no cobrar pedidos en cero.
     izipay_min_order_centimos: int = int(os.getenv("IZIPAY_MIN_ORDER_CENTIMOS", "100"))
+    # Pagina publica de demostracion del boton de Izipay (/pago-izipay en la
+    # web), para que Izipay valide el sitio sin cambiar la pasarela del carrito.
+    # Cobra un monto fijo que no corresponde a ningun pedido.
+    # Con las claves de TEST, cualquiera puede "pagar" con las tarjetas de
+    # prueba publicas de Izipay. En produccion esos pagos no deben liberar el
+    # pedido al negocio; solo se aceptan si esto esta activo (entornos de prueba).
+    izipay_accept_test_payments: bool = os.getenv("IZIPAY_ACCEPT_TEST_PAYMENTS", "").strip().lower() in ("1", "true", "yes")
+    izipay_demo_enabled: bool = os.getenv("IZIPAY_DEMO_ENABLED", "").strip().lower() in ("1", "true", "yes")
+    izipay_demo_amount_centimos: int = int(os.getenv("IZIPAY_DEMO_AMOUNT_CENTIMOS", "100"))
 
     # SDK de Izipay (boton de pagos de Punto Web): tarjeta, Yape, Plin y QR.
     # Las claves salen del panel de comercio (sandbox-panel.izipay.pe para

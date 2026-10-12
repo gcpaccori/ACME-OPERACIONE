@@ -140,6 +140,27 @@ class IzipaySdkConfirmRequest(BaseModel):
     signature: str = Field(..., min_length=10)
 
 
+class IzipayDemoResponse(BaseModel):
+    """Formulario de Izipay para la pagina de demostracion (sin pedido)."""
+    order_id: str
+    form_token: str
+    public_key: str
+    mode: str
+    monto_centimos: int
+
+
+class IzipayDemoConfirmRequest(BaseModel):
+    kr_answer: str = Field(..., min_length=2)
+    kr_hash: str = Field(..., min_length=10)
+    kr_hash_key: Optional[str] = None
+
+
+class IzipayDemoConfirmResponse(BaseModel):
+    exito: bool
+    payment_status: str
+    mensaje: str
+
+
 class IzipayConfirmResponse(BaseModel):
     exito: bool
     courier_order_id: str

@@ -370,6 +370,11 @@ def sync_culqi_order(culqi_order_id: str) -> str | None:
 # Izipay
 # ---------------------------------------------------------------------------
 
+def izipay_test_payment_blocked(resumen: dict[str, Any]) -> bool:
+    """Un pago de TEST no confirma pedidos reales salvo IZIPAY_ACCEPT_TEST_PAYMENTS."""
+    return str(resumen.get("mode") or "").upper() == "TEST" and not settings.izipay_accept_test_payments
+
+
 def izipay_verified(resumen: dict[str, Any], raw: dict[str, Any] | None = None) -> dict[str, Any] | None:
     """
     Convierte el resumen de una respuesta de Izipay ya autenticada (firma
@@ -382,6 +387,9 @@ def izipay_verified(resumen: dict[str, Any], raw: dict[str, Any] | None = None) 
         return None
     if resumen.get("currency") and resumen.get("currency") != "PEN":
         logger.error("izipay: moneda inesperada %s en %s", resumen.get("currency"), resumen.get("order_id"))
+        return None
+    if izipay_test_payment_blocked(resumen):
+        logger.warning("izipay: pago en modo TEST ignorado para %s", resumen.get("order_id"))
         return None
     return {
         "id": resumen.get("order_id"),

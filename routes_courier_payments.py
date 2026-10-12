@@ -1,6 +1,7 @@
 from concurrent.futures import ThreadPoolExecutor
 import logging
 import time
+import uuid
 
 from fastapi import APIRouter, Header, HTTPException
 
@@ -13,6 +14,9 @@ from models import (
     CourierPaymentSyncResponse,
     IzipayConfirmRequest,
     IzipayConfirmResponse,
+    IzipayDemoConfirmRequest,
+    IzipayDemoConfirmResponse,
+    IzipayDemoResponse,
     IzipaySdkConfirmRequest,
 )
 from config import active_payment_provider, settings
@@ -37,6 +41,7 @@ from routes_webhooks import (
     CulqiUnavailable,
     apply_izipay_answer,
     apply_izipay_sdk_payload,
+    izipay_test_payment_blocked,
     sync_culqi_order,
     sync_izipay_order,
     sync_izipay_sdk_order,
@@ -573,6 +578,14 @@ def confirm_izipay_payment(payload: IzipayConfirmRequest):
 
     applied = apply_izipay_answer(answer, "izipay.browser")
     status = applied or resumen.get("status") or "pending"
+    if resumen.get("status") == "paid" and izipay_test_payment_blocked(resumen):
+        return IzipayConfirmResponse(
+            exito=False,
+            courier_order_id=payload.order_id,
+            payment_status="pending",
+            transaccion_id=resumen.get("transaction_uuid"),
+            mensaje="Izipay esta en modo de prueba: este pago no confirma el pedido.",
+        )
     if resumen.get("status") == "paid" and applied != "paid":
         # Firma valida pero el monto no coincide con el pedido, o no se pudo
         # guardar. La IPN y la sincronizacion lo vuelven a intentar.
@@ -591,6 +604,62 @@ def confirm_izipay_payment(payload: IzipayConfirmRequest):
         payment_status=status,
         transaccion_id=resumen.get("transaction_uuid"),
         mensaje="Pago confirmado" if status == "paid" else (resumen.get("error_message") or "El pago no se completo."),
+    )
+
+
+IZIPAY_DEMO_ORDER_PREFIX = "demo-"
+
+
+def _izipay_demo_service() -> IzipayService:
+    service = izipay_service()
+    if not settings.izipay_demo_enabled or not service.configured:
+        raise HTTPException(status_code=404, detail="Not Found")
+    return service
+
+
+@router.post("/izipay/demo", response_model=IzipayDemoResponse)
+def create_izipay_demo_payment():
+    """
+    Formulario de Izipay por un monto fijo, sin pedido ni sesion, para la
+    pagina publica /pago-izipay que Izipay revisa al validar el sitio. El
+    orderId no lleva el prefijo de pedidos, asi que la IPN no lo aplica a
+    nada. Solo responde con IZIPAY_DEMO_ENABLED.
+    """
+    service = _izipay_demo_service()
+    result = service.crear_form_token(
+        courier_order_id="demo",
+        monto=settings.izipay_demo_amount_centimos,
+        email="demo@acmepedidos.com",
+        nombre="Cliente Demo",
+        telefono=None,
+        referencia_cliente=None,
+        order_id=f"{IZIPAY_DEMO_ORDER_PREFIX}{uuid.uuid4().hex[:12]}",
+    )
+    if not result.get("exito"):
+        raise HTTPException(status_code=502, detail=result.get("mensaje") or "Izipay no respondio.")
+    return IzipayDemoResponse(
+        order_id=result["order_id"],
+        form_token=result["form_token"],
+        public_key=result["public_key"],
+        mode=result["mode"],
+        monto_centimos=result["monto_centimos"],
+    )
+
+
+@router.post("/izipay/demo/confirm", response_model=IzipayDemoConfirmResponse)
+def confirm_izipay_demo_payment(payload: IzipayDemoConfirmRequest):
+    """Verifica la firma de la respuesta de la demo y dice si se pago. No guarda nada."""
+    service = _izipay_demo_service()
+    if not service.verificar_firma(payload.kr_answer, payload.kr_hash, payload.kr_hash_key or "sha256_hmac"):
+        raise HTTPException(status_code=400, detail="La respuesta de pago no tiene una firma valida.")
+    resumen = summarize_answer(IzipayService.leer_respuesta(payload.kr_answer))
+    if not str(resumen.get("order_id") or "").startswith(IZIPAY_DEMO_ORDER_PREFIX):
+        raise HTTPException(status_code=400, detail="La respuesta no es de la pagina de demostracion.")
+    status = resumen.get("status") or "pending"
+    return IzipayDemoConfirmResponse(
+        exito=status == "paid",
+        payment_status=status,
+        mensaje="Pago aprobado" if status == "paid" else (resumen.get("error_message") or "El pago no se completo."),
     )
 
 

@@ -196,8 +196,13 @@ class IzipayService:
         nombre: str,
         telefono: str | None,
         referencia_cliente: str | None,
+        order_id: str | None = None,
     ) -> Dict[str, Any]:
-        """Crea el formToken con el que el navegador muestra el formulario de pago."""
+        """
+        Crea el formToken con el que el navegador muestra el formulario de pago.
+        order_id solo se pasa para pagos que no son de un pedido (la pagina de
+        demostracion); sin el prefijo de pedidos, la IPN no los aplica a nada.
+        """
         clean_email = str(email or "").strip().lower()
         if not EMAIL_RE.match(clean_email):
             return {"exito": False, "mensaje": "El email del cliente no es valido para Izipay.", "error_tipo": "validation"}
@@ -213,7 +218,7 @@ class IzipayService:
         if phone:
             billing["cellPhoneNumber"] = phone
 
-        order_id = izipay_order_id(courier_order_id)
+        order_id = order_id or izipay_order_id(courier_order_id)
         payload: Dict[str, Any] = {
             "amount": int(monto),
             "currency": "PEN",

@@ -72,6 +72,7 @@ def fake_keys(monkeypatch):
     monkeypatch.setattr(settings, "izipay_password", FAKE_PASSWORD)
     monkeypatch.setattr(settings, "izipay_public_key", "12345678:testpublickey_fake")
     monkeypatch.setattr(settings, "izipay_hmac_key", FAKE_HMAC)
+    monkeypatch.setattr(settings, "izipay_accept_test_payments", True)
 
 
 @pytest.fixture
@@ -288,3 +289,82 @@ def test_order_endpoint_usa_izipay(monkeypatch):
     assert data["form_token"] == "tok"
     assert data["monto_centimos"] == 250
     assert fake.upserts[0]["provider"] == "izipay"
+
+
+def demo_answer() -> dict:
+    answer = paid_answer(amount=100)
+    answer["orderDetails"]["orderId"] = "demo-abc123def456"
+    return answer
+
+
+def test_demo_apagada_no_existe(monkeypatch):
+    monkeypatch.setattr(settings, "izipay_demo_enabled", False)
+    assert TestClient(app).post("/api/courier/payments/izipay/demo").status_code == 404
+
+
+def test_demo_crea_formulario_sin_pedido(monkeypatch):
+    monkeypatch.setattr(settings, "izipay_demo_enabled", True)
+    sent = {}
+
+    def fake_request(self, web_service, payload):
+        sent.update(payload)
+        return {"status": "SUCCESS", "mode": "TEST", "answer": {"formToken": "tok-demo"}}
+
+    monkeypatch.setattr(IzipayService, "_request", fake_request)
+    res = TestClient(app).post("/api/courier/payments/izipay/demo")
+    assert res.status_code == 200, res.text
+    data = res.json()
+    assert data["form_token"] == "tok-demo"
+    assert data["monto_centimos"] == settings.izipay_demo_amount_centimos
+    assert sent["orderId"].startswith("demo-") and data["order_id"] == sent["orderId"]
+
+
+def test_demo_confirma_firma(monkeypatch, applied):
+    monkeypatch.setattr(settings, "izipay_demo_enabled", True)
+    text = json.dumps(demo_answer())
+    res = TestClient(app).post(
+        "/api/courier/payments/izipay/demo/confirm",
+        json={"kr_answer": text, "kr_hash": sign(FAKE_HMAC, text), "kr_hash_key": "sha256_hmac"},
+    )
+    assert res.status_code == 200, res.text
+    assert res.json()["payment_status"] == "paid"
+    bad = TestClient(app).post(
+        "/api/courier/payments/izipay/demo/confirm",
+        json={"kr_answer": text, "kr_hash": sign("otra", text), "kr_hash_key": "sha256_hmac"},
+    )
+    assert bad.status_code == 400
+    # Una respuesta de un pedido real no se acepta como demo.
+    real = json.dumps(paid_answer())
+    res = TestClient(app).post(
+        "/api/courier/payments/izipay/demo/confirm",
+        json={"kr_answer": real, "kr_hash": sign(FAKE_HMAC, real), "kr_hash_key": "sha256_hmac"},
+    )
+    assert res.status_code == 400
+    assert applied == []
+
+
+def test_ipn_de_la_demo_no_toca_pedidos(applied):
+    text = json.dumps(demo_answer())
+    res = TestClient(app).post(
+        "/api/webhooks/izipay",
+        data={"kr-answer": text, "kr-hash": sign(FAKE_PASSWORD, text), "kr-hash-key": "password", "kr-hash-algorithm": "sha256_hmac"},
+    )
+    assert res.status_code == 200, res.text
+    assert applied == []
+
+
+def test_pago_de_test_no_libera_pedidos_en_produccion(monkeypatch, applied):
+    monkeypatch.setattr(settings, "izipay_accept_test_payments", False)
+    text = json.dumps(paid_answer())
+    res = TestClient(app).post(
+        "/api/webhooks/izipay",
+        data={"kr-answer": text, "kr-hash": sign(FAKE_PASSWORD, text), "kr-hash-key": "password", "kr-hash-algorithm": "sha256_hmac"},
+    )
+    assert res.status_code == 200
+    res = TestClient(app).post(
+        "/api/courier/payments/izipay/confirm",
+        json={"order_id": ORDER_ID, "kr_answer": text, "kr_hash": sign(FAKE_HMAC, text), "kr_hash_key": "sha256_hmac"},
+    )
+    assert res.status_code == 200
+    assert res.json()["payment_status"] == "pending"
+    assert applied == []
