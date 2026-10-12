@@ -174,7 +174,6 @@ def create_courier_quote(
 
         # 10. Tarifa ACME por tramos (12% hasta S/ 100, 8% sobre el exceso)
         platform_fee = calculate_service_fee(base)
-        service_fee_rate = effective_service_fee_rate(base, platform_fee)
 
         # 11. Tip
         tip_amount = round(float(payload.tip_amount), 2)
@@ -190,6 +189,7 @@ def create_courier_quote(
         # sola linea para el cliente. payment_processing_fee queda en 0 para
         # que la web y la app no la muestren ni la sumen dos veces.
         service_fee = round(platform_fee + card_fee, 2)
+        service_fee_rate = effective_service_fee_rate(base, service_fee)
         payment_processing_fee = 0.0
         processing["note"] = f"Comision de tarjeta S/ {card_fee:.2f} incluida en la tarifa de servicio."
         total = round(payment_base + card_fee, 2)

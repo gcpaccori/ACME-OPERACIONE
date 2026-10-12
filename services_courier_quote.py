@@ -522,7 +522,11 @@ def calculate_service_fee(base_amount: float) -> float:
 
 
 def effective_service_fee_rate(base_amount: float, service_fee: float) -> float:
-    """Porcentaje efectivo cobrado (tarifa / base), para guardar en la orden."""
+    """Porcentaje efectivo cobrado (tarifa / base), para guardar en la orden.
+
+    La columna es numeric(5,4), asi que se limita a 9.9999 por si un pedido
+    casi sin productos lleva una comision de tarjeta mayor que su base.
+    """
     if base_amount <= 0:
         return float(settings.service_fee_rate_up_to_threshold)
-    return round(service_fee / base_amount, 4)
+    return min(9.9999, round(service_fee / base_amount, 4))
