@@ -66,14 +66,16 @@ class Settings(BaseSettings):
     # ninguna las tiene: desplegar sin las variables nuevas no rompe los cobros.
     payment_provider: str = os.getenv("PAYMENT_PROVIDER", "")
     # Comision de Izipay por tarjeta nacional, sin IGV (el IGV se suma aparte).
-    # 3.44% es la tarifa publicada; el fijo por operacion depende del contrato.
+    # Tarifa publicada en sus terminos: 3.44% + IGV y S/ 0.69 + IGV fijo por
+    # operacion (filtros de seguridad). Ajustar si el contrato dice otra cosa.
     izipay_card_rate: float = float(os.getenv("IZIPAY_CARD_RATE", "0.0344"))
-    izipay_card_fixed_pen: float = float(os.getenv("IZIPAY_CARD_FIXED_PEN", "0"))
-    # Yape cobrado por Culqi: tasa sin IGV y comision minima por pago (el
-    # minimo pesa en compras chicas; con 3.44% + IGV se pasa del minimo a
-    # partir de unos S/ 82).
+    izipay_card_fixed_pen: float = float(os.getenv("IZIPAY_CARD_FIXED_PEN", "0.69"))
+    # Yape cobrado por Culqi, segun culqi.com/tarifas: desde 3.44%, comision
+    # minima de S/ 3.50 para montos menores a S/ 87.72 y "comisiones inafectas
+    # a IGV", por eso no se le suma IGV salvo que el contrato diga lo contrario.
     culqi_yape_rate: float = float(os.getenv("CULQI_YAPE_RATE", "0.0344"))
     culqi_yape_min_fee_pen: float = float(os.getenv("CULQI_YAPE_MIN_FEE_PEN", "3.50"))
+    culqi_yape_apply_igv: bool = os.getenv("CULQI_YAPE_APPLY_IGV", "false").lower() == "true"
     
     # API
     api_host: str = os.getenv("API_HOST", "0.0.0.0")

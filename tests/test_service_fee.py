@@ -17,14 +17,16 @@ def test_comision_tarjeta_izipay_y_yape_culqi(monkeypatch):
 
     card = calculate_payment_processing_fee(19.5, "card")
     assert card["provider"] == "izipay"
-    assert card["fee"] == 0.83
+    # 3.44% + IGV y S/ 0.69 + IGV fijo.
+    assert card["fee"] == 1.67
 
     # Yape por Culqi: en compras chicas manda el minimo por pago.
     yape = calculate_payment_processing_fee(19.5, "yape")
     assert yape["provider"] == "culqi"
     assert yape["fee"] == 3.5
-    # En compras grandes manda el porcentaje.
-    assert calculate_payment_processing_fee(173, "yape")["fee"] == calculate_payment_processing_fee(173, "card")["fee"]
+    assert yape["tax_amount"] == 0.0
+    # En compras grandes manda el porcentaje, sin IGV porque Culqi la publica inafecta.
+    assert calculate_payment_processing_fee(200, "yape")["fee"] == 7.13
 
 
 def test_yape_sin_culqi_no_se_cotiza(monkeypatch):
