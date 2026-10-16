@@ -19,7 +19,7 @@ from models import (
     IzipayDemoResponse,
     IzipaySdkConfirmRequest,
 )
-from config import active_payment_provider, settings
+from config import payment_provider_for, settings
 from services_courier_payments import SupabaseCourierError, SupabaseCourierPayments
 from services_culqi import CulqiService
 from services_izipay import (
@@ -182,7 +182,10 @@ def create_courier_payment_order(
         amount = order_amount_centimos(order)
         if amount <= 0:
             raise HTTPException(status_code=400, detail="El pedido no tiene un monto valido para cobrar.")
-        provider = active_payment_provider()
+        try:
+            provider = payment_provider_for(payload.payment_method)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
         if provider == "izipay_sdk":
             return _open_izipay_sdk_payment(
                 supabase,

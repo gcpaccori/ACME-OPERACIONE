@@ -128,4 +128,22 @@ def active_payment_provider() -> str:
     return "culqi"
 
 
+def culqi_configured() -> bool:
+    return bool(settings.culqi_public_key and settings.culqi_private_key)
+
+
+def payment_provider_for(method: str | None) -> str:
+    """Pasarela para un medio de pago concreto.
+
+    Yape va por Culqi cuando la pasarela activa es el formulario de Izipay,
+    que en esta tienda solo tiene contrato de tarjetas.
+    """
+    provider = active_payment_provider()
+    if method == "yape" and provider == "izipay":
+        if not culqi_configured():
+            raise ValueError("El pago con Yape no esta disponible por ahora. Paga con tarjeta.")
+        return "culqi"
+    return provider
+
+
 settings = Settings()

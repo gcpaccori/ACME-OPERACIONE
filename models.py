@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr, Field
-from typing import Any, Dict, Optional, List
+from typing import Any, Dict, Literal, Optional, List
 from datetime import datetime
 
 # ============ PRODUCTOS ============
@@ -108,6 +108,9 @@ class CourierPaymentOrderRequest(BaseModel):
     nombre_cliente: Optional[str] = None
     telefono_cliente: Optional[str] = None
     descripcion: Optional[str] = None
+    # "card" o "yape". Con "yape" el pago va por Culqi aunque la pasarela
+    # activa sea Izipay, mientras Izipay no tenga Yape en la tienda.
+    payment_method: Optional[Literal["card", "yape"]] = None
 
 class CourierPaymentOrderResponse(BaseModel):
     order_id: str
