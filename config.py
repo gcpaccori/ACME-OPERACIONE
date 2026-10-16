@@ -75,6 +75,10 @@ class Settings(BaseSettings):
     # a IGV", por eso no se le suma IGV salvo que el contrato diga lo contrario.
     culqi_yape_rate: float = float(os.getenv("CULQI_YAPE_RATE", "0.0344"))
     culqi_yape_min_fee_pen: float = float(os.getenv("CULQI_YAPE_MIN_FEE_PEN", "3.50"))
+    # Recargo al envio por cada local extra en un mismo pedido: el segundo local
+    # suma 10% del envio, el tercero 15%, el cuarto 20% y el quinto 25%. El
+    # numero de valores fija cuantos locales extra se aceptan.
+    multi_store_delivery_surcharges: str = os.getenv("MULTI_STORE_DELIVERY_SURCHARGES", "0.10,0.15,0.20,0.25")
     culqi_yape_apply_igv: bool = os.getenv("CULQI_YAPE_APPLY_IGV", "false").lower() == "true"
     
     # API

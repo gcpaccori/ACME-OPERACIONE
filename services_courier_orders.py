@@ -156,6 +156,18 @@ class SupabaseOrderService:
                 logger.warning("No se pudo crear la direccion: %s", exc)
                 address_id = None
 
+        # Con varios locales, el pedido del primero lleva solo sus productos;
+        # los de cada otro local van en su propio pedido (mas abajo).
+        snapshot = quote.get("items_snapshot") or []
+        if any(str(item.get("branch_id") or branch_id) != branch_id for item in snapshot):
+            main_subtotal = round(sum(
+                float(item.get("line_total", 0) or 0)
+                for item in snapshot
+                if str(item.get("branch_id") or branch_id) == branch_id
+            ), 2)
+        else:
+            main_subtotal = float(quote.get("subtotal", 0) or 0)
+
         order_id = str(uuid4())
         order_payload = {
             "id": order_id,
@@ -164,8 +176,8 @@ class SupabaseOrderService:
             "branch_id": branch_id,
             "status": AWAITING_PAYMENT_STATUS,
             "payment_status": "pending",
-            "subtotal": float(quote.get("subtotal", 0) or 0),
-            "products_total": float(quote.get("subtotal", 0) or 0),
+            "subtotal": main_subtotal,
+            "products_total": main_subtotal,
             "discount_total": float(quote.get("discount", 0) or 0),
             "delivery_fee": float(quote.get("delivery_fee", 0) or 0),
             "service_fee": float(quote.get("service_fee", 0) or 0),
@@ -238,23 +250,73 @@ class SupabaseOrderService:
         created_order = order_rows[0] if order_rows else order_payload
         initial_status = str(created_order.get("status") or order_payload["status"])
 
-        items_payload: list[dict[str, Any]] = []
+        # Pedido con productos de varios locales: cada local recibe su propio
+        # pedido con sus productos, y el cobro completo vive en el del primer
+        # local. Los demas comparten quote_id y se liberan al pagarse ese.
+        items_by_branch: dict[str, list[dict[str, Any]]] = {}
         for item in quote.get("items_snapshot") or []:
-            unit_price = float(item.get("unit_price", item.get("customer_unit_price", 0)) or 0)
-            items_payload.append({
-                "id": str(uuid4()),
-                "order_id": order_id,
-                "product_id": item.get("product_id"),
-                "product_name_snapshot": item.get("product_name_snapshot") or item.get("product_name", ""),
-                "unit_price": unit_price,
-                "quantity": int(item.get("quantity", 1) or 1),
-                "notes": item.get("notes"),
-                "line_total": float(item.get("line_total", 0) or 0),
-                "customer_unit_price": float(item.get("customer_unit_price", unit_price) or 0),
-                "merchant_unit_price": float(item.get("merchant_unit_price", unit_price) or 0),
-                "platform_margin": float(item.get("platform_margin", 0) or 0),
+            item_branch = str(item.get("branch_id") or branch_id)
+            items_by_branch.setdefault(item_branch, []).append(item)
+        items_by_branch.setdefault(branch_id, [])
+
+        order_ids_by_branch: dict[str, str] = {branch_id: order_id}
+        for extra_branch_id in items_by_branch:
+            if extra_branch_id == branch_id:
+                continue
+            extra_branch = self.get_branch(extra_branch_id, bearer_token)
+            extra_merchant_id = str(extra_branch.get("merchant_id") or "")
+            if not extra_merchant_id:
+                raise SupabaseOrderError(f"La sucursal '{extra_branch_id}' no tiene merchant_id.")
+            extra_subtotal = round(sum(float(i.get("line_total", 0) or 0) for i in items_by_branch[extra_branch_id]), 2)
+            extra_order_id = str(uuid4())
+            extra_payload = {
+                **{key: 0.0 for key in (
+                    "discount_total", "delivery_fee", "service_fee", "service_fee_rate", "tip_amount",
+                    "tax_amount", "taxable_base", "igv_amount", "payment_processing_fee",
+                    "payment_processing_rate", "payment_processing_fixed", "payment_processing_tax_amount",
+                )},
+                "id": extra_order_id,
+                "customer_id": customer_id,
+                "merchant_id": extra_merchant_id,
+                "branch_id": extra_branch_id,
+                "status": order_payload["status"],
+                "payment_status": "pending",
+                "subtotal": extra_subtotal,
+                "products_total": extra_subtotal,
+                "igv_rate": order_payload["igv_rate"],
+                "payment_processing_provider": order_payload["payment_processing_provider"],
+                "payment_processing_note": None,
+                # El cobro va en el pedido del primer local, para no contarlo dos veces.
+                "total": 0.0,
+                "currency": "PEN",
+                "quote_id": quote.get("id"),
+                "fulfillment_type": fulfillment_type,
+                "special_instructions": delivery_data.get("special_instructions"),
+                "placed_at": now,
                 "created_at": now,
-            })
+                "updated_at": now,
+            }
+            insert_order(extra_payload)
+            order_ids_by_branch[extra_branch_id] = extra_order_id
+
+        items_payload: list[dict[str, Any]] = []
+        for item_branch, branch_items in items_by_branch.items():
+            for item in branch_items:
+                unit_price = float(item.get("unit_price", item.get("customer_unit_price", 0)) or 0)
+                items_payload.append({
+                    "id": str(uuid4()),
+                    "order_id": order_ids_by_branch[item_branch],
+                    "product_id": item.get("product_id"),
+                    "product_name_snapshot": item.get("product_name_snapshot") or item.get("product_name", ""),
+                    "unit_price": unit_price,
+                    "quantity": int(item.get("quantity", 1) or 1),
+                    "notes": item.get("notes"),
+                    "line_total": float(item.get("line_total", 0) or 0),
+                    "customer_unit_price": float(item.get("customer_unit_price", unit_price) or 0),
+                    "merchant_unit_price": float(item.get("merchant_unit_price", unit_price) or 0),
+                    "platform_margin": float(item.get("platform_margin", 0) or 0),
+                    "created_at": now,
+                })
 
         if items_payload:
             self._request(
@@ -265,48 +327,49 @@ class SupabaseOrderService:
                 prefer="return=minimal",
             )
 
-        if fulfillment_type == "delivery" and addr:
-            delivery_detail_payload = {
-                "order_id": order_id,
-                "address_id": address_id,
-                "address_snapshot": addr.get("line1"),
-                "reference_snapshot": addr.get("reference"),
-                "district_snapshot": addr.get("district"),
-                "city_snapshot": addr.get("city"),
-                "region_snapshot": addr.get("region"),
-                "lat": addr.get("lat"),
-                "lng": addr.get("lng"),
-                "estimated_distance_km": quote.get("distance_km"),
-                "recipient_name": delivery_data.get("recipient_name"),
-                "recipient_phone": delivery_data.get("recipient_phone"),
+        for group_order_id in order_ids_by_branch.values():
+            if fulfillment_type == "delivery" and addr:
+                delivery_detail_payload = {
+                    "order_id": group_order_id,
+                    "address_id": address_id,
+                    "address_snapshot": addr.get("line1"),
+                    "reference_snapshot": addr.get("reference"),
+                    "district_snapshot": addr.get("district"),
+                    "city_snapshot": addr.get("city"),
+                    "region_snapshot": addr.get("region"),
+                    "lat": addr.get("lat"),
+                    "lng": addr.get("lng"),
+                    "estimated_distance_km": quote.get("distance_km"),
+                    "recipient_name": delivery_data.get("recipient_name"),
+                    "recipient_phone": delivery_data.get("recipient_phone"),
+                    "created_at": now,
+                    "updated_at": now,
+                }
+                self._request(
+                    "POST",
+                    "order_delivery_details",
+                    bearer_token=bearer_token,
+                    json=delivery_detail_payload,
+                    prefer="return=minimal",
+                )
+
+            history_payload = {
+                "id": str(uuid4()),
+                "order_id": group_order_id,
+                "from_status": initial_status,
+                "to_status": initial_status,
+                "actor_user_id": customer_id,
+                "actor_type": "customer",
+                "note": f"Pedido creado desde cotizacion {quote.get('id')}, esperando pago" + ("" if group_order_id == order_id else " (parte de un pedido con varios locales)"),
                 "created_at": now,
-                "updated_at": now,
             }
             self._request(
                 "POST",
-                "order_delivery_details",
+                "order_status_history",
                 bearer_token=bearer_token,
-                json=delivery_detail_payload,
+                json=history_payload,
                 prefer="return=minimal",
             )
-
-        history_payload = {
-            "id": str(uuid4()),
-            "order_id": order_id,
-            "from_status": initial_status,
-            "to_status": initial_status,
-            "actor_user_id": customer_id,
-            "actor_type": "customer",
-            "note": f"Pedido creado desde cotizacion {quote.get('id')}, esperando pago",
-            "created_at": now,
-        }
-        self._request(
-            "POST",
-            "order_status_history",
-            bearer_token=bearer_token,
-            json=history_payload,
-            prefer="return=minimal",
-        )
 
         self._request(
             "PATCH",
