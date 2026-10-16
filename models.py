@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr, Field
-from typing import Any, Dict, Optional, List
+from typing import Any, Dict, Literal, Optional, List
 from datetime import datetime
 
 # ============ PRODUCTOS ============
@@ -108,6 +108,9 @@ class CourierPaymentOrderRequest(BaseModel):
     nombre_cliente: Optional[str] = None
     telefono_cliente: Optional[str] = None
     descripcion: Optional[str] = None
+    # "card" o "yape". Con "yape" el pago va por Culqi aunque la pasarela
+    # activa sea Izipay, mientras Izipay no tenga Yape en la tienda.
+    payment_method: Optional[Literal["card", "yape"]] = None
 
 class CourierPaymentOrderResponse(BaseModel):
     order_id: str
@@ -205,6 +208,8 @@ class QuoteItemInput(BaseModel):
     product_id: str = Field(..., min_length=1)
     quantity: int = Field(..., gt=0)
     modifier_ids: List[str] = Field(default_factory=list)
+    # Local del que sale el producto; si falta, es el branch_id del pedido.
+    branch_id: Optional[str] = None
 
 class CourierQuoteRequest(BaseModel):
     branch_id: str = Field(..., min_length=1)
@@ -225,6 +230,11 @@ class CourierTariffSurcharge(BaseModel):
     code: str
     label: str
     amount: float
+
+class CourierQuoteBranch(BaseModel):
+    branch_id: str
+    subtotal: float
+    distance_km: Optional[float] = None
 
 class CourierQuoteResponse(BaseModel):
     quote_id: str
@@ -254,6 +264,11 @@ class CourierQuoteResponse(BaseModel):
     delivery_detail: Optional[str] = None
     delivery_surcharges_total: float = 0.0
     delivery_surcharges: List[CourierTariffSurcharge] = Field(default_factory=list)
+    # Pedido con productos de varios locales: el envio sube por cada local extra.
+    branch_count: int = 1
+    multi_store_surcharge: float = 0.0
+    multi_store_surcharge_rate: float = 0.0
+    branches: List[CourierQuoteBranch] = Field(default_factory=list)
     expires_at: str
 
 class CourierReverseGeocodeResponse(BaseModel):

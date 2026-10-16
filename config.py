@@ -65,6 +65,21 @@ class Settings(BaseSettings):
     # la primera que tenga sus claves configuradas en ese orden, y Culqi si
     # ninguna las tiene: desplegar sin las variables nuevas no rompe los cobros.
     payment_provider: str = os.getenv("PAYMENT_PROVIDER", "")
+    # Comision de Izipay por tarjeta nacional, sin IGV (el IGV se suma aparte).
+    # Tarifa publicada en sus terminos: 3.44% + IGV y S/ 0.69 + IGV fijo por
+    # operacion (filtros de seguridad). Ajustar si el contrato dice otra cosa.
+    izipay_card_rate: float = float(os.getenv("IZIPAY_CARD_RATE", "0.0344"))
+    izipay_card_fixed_pen: float = float(os.getenv("IZIPAY_CARD_FIXED_PEN", "0.69"))
+    # Yape cobrado por Culqi, segun culqi.com/tarifas: desde 3.44%, comision
+    # minima de S/ 3.50 para montos menores a S/ 87.72 y "comisiones inafectas
+    # a IGV", por eso no se le suma IGV salvo que el contrato diga lo contrario.
+    culqi_yape_rate: float = float(os.getenv("CULQI_YAPE_RATE", "0.0344"))
+    culqi_yape_min_fee_pen: float = float(os.getenv("CULQI_YAPE_MIN_FEE_PEN", "3.50"))
+    # Recargo al envio por cada local extra en un mismo pedido: el segundo local
+    # suma 10% del envio, el tercero 15%, el cuarto 20% y el quinto 25%. El
+    # numero de valores fija cuantos locales extra se aceptan.
+    multi_store_delivery_surcharges: str = os.getenv("MULTI_STORE_DELIVERY_SURCHARGES", "0.10,0.15,0.20,0.25")
+    culqi_yape_apply_igv: bool = os.getenv("CULQI_YAPE_APPLY_IGV", "false").lower() == "true"
     
     # API
     api_host: str = os.getenv("API_HOST", "0.0.0.0")
@@ -79,21 +94,18 @@ class Settings(BaseSettings):
     geocoding_search_api_url: str = os.getenv("GEOCODING_SEARCH_API_URL", "https://nominatim.openstreetmap.org/search")
     geocoding_user_agent: str = os.getenv("GEOCODING_USER_AGENT", "ACME-Courier-Huancavelica/1.0")
     geocoding_timeout_seconds: float = float(os.getenv("GEOCODING_TIMEOUT_SECONDS", "5.0"))
-    platform_service_fee_rate: float = float(os.getenv("PLATFORM_SERVICE_FEE_RATE", "0.036"))
+    # Tarifa de servicio por tramos sobre el precio de los productos: 12% hasta
+    # S/ 100 y 8% solo sobre lo que pasa de S/ 100. Asi un pedido de S/ 101
+    # nunca paga menos tarifa que uno de S/ 100.
+    service_fee_tier_threshold_pen: float = float(os.getenv("SERVICE_FEE_TIER_THRESHOLD_PEN", "100"))
+    service_fee_rate_up_to_threshold: float = float(os.getenv("SERVICE_FEE_RATE_UP_TO_THRESHOLD", "0.12"))
+    service_fee_rate_above_threshold: float = float(os.getenv("SERVICE_FEE_RATE_ABOVE_THRESHOLD", "0.08"))
     igv_rate: float = float(os.getenv("IGV_RATE", "0.18"))
     culqi_online_rate: float = float(os.getenv("CULQI_ONLINE_RATE", "0.0344"))
     culqi_online_fixed_usd: float = float(os.getenv("CULQI_ONLINE_FIXED_USD", "0.20"))
     culqi_exchange_rate: float = float(os.getenv("CULQI_EXCHANGE_RATE", "3.85"))
-    culqi_min_fee_pen: float = float(os.getenv("CULQI_MIN_FEE_PEN", "3.50"))
-    # Monto a partir del cual la comision por tasa supera al minimo. Se deja en
-    # 0 para que se calcule sola a partir de la tasa, el fijo y el minimo: el
-    # valor que estaba escrito a mano (87.72) no cuadraba con ninguno de los
-    # dos y producia un salto en la comision justo en ese punto.
-    culqi_min_threshold_pen: float = float(os.getenv("CULQI_MIN_THRESHOLD_PEN", "0"))
-    # La comision de Culqi es un costo del negocio, no del cliente: el cliente
-    # ya paga la tarifa de servicio del 3.6%. Cobrarle ademas la pasarela es
-    # cobrarle dos veces por lo mismo.
-    pass_culqi_fee_to_customer: bool = os.getenv("PASS_CULQI_FEE_TO_CUSTOMER", "False").lower() == "true"
+    # La comision de la pasarela la paga el cliente en su propia linea
+    # ("Comision de pasarela"), calculada segun el medio de pago elegido.
 
     @field_validator("debug", "skip_legacy_db_init", mode="before")
     @classmethod
@@ -125,6 +137,24 @@ def active_payment_provider() -> str:
     if settings.izipay_username and settings.izipay_password and settings.izipay_public_key:
         return "izipay"
     return "culqi"
+
+
+def culqi_configured() -> bool:
+    return bool(settings.culqi_public_key and settings.culqi_private_key)
+
+
+def payment_provider_for(method: str | None) -> str:
+    """Pasarela para un medio de pago concreto.
+
+    Yape va por Culqi cuando la pasarela activa es el formulario de Izipay,
+    que en esta tienda solo tiene contrato de tarjetas.
+    """
+    provider = active_payment_provider()
+    if method == "yape" and provider == "izipay":
+        if not culqi_configured():
+            raise ValueError("El pago con Yape no esta disponible por ahora. Paga con tarjeta.")
+        return "culqi"
+    return provider
 
 
 settings = Settings()

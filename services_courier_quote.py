@@ -8,7 +8,7 @@ import math
 
 import requests
 
-from config import active_payment_provider, settings
+from config import payment_provider_for, settings
 from services_courier_tariffs import TariffZoneOverride, extract_zone_code
 
 logger = logging.getLogger(__name__)
@@ -94,7 +94,7 @@ class SupabaseQuoteService:
             "products",
             bearer_token=bearer_token,
             params={
-                "select": "id,base_price,name",
+                "select": "id,base_price,name,merchant_id",
                 "id": f"in.({ids_csv})",
             },
         )
@@ -334,56 +334,52 @@ def calculate_road_distance_km(lat1: float, lng1: float, lat2: float, lng2: floa
     return fallback_km
 
 
-def calculate_payment_processing_fee(amount: float) -> dict[str, Any]:
-    """Comision referencial de la pasarela para pagos nacionales."""
-    provider = active_payment_provider()
+def calculate_payment_processing_fee(amount: float, payment_method: str = "card") -> dict[str, Any]:
+    """Comision de la pasarela que cobra este medio de pago, sobre todo el pedido.
+
+    Tarjeta por Izipay: tasa + fijo en soles, ambos con IGV.
+    Yape por Culqi: tasa con un minimo por pago, sin IGV (Culqi la publica
+    inafecta). Tarjeta por Culqi: tasa + fijo
+    en USD. La comision se sube de forma que, despues de que la pasarela
+    descuente su parte, llegue completo el monto original.
+    """
+    method = "yape" if payment_method == "yape" else "card"
+    provider = payment_provider_for(method)
+    igv = max(0.0, float(settings.igv_rate or 0.0))
+    min_fee = 0.0
+    fee_igv = igv
     if provider in ("izipay", "izipay_sdk"):
-        # La comision de Izipay la asume el comercio: no se suma al total ni
-        # tiene minimo por compra como el de Culqi.
-        return {
-            "fee": 0.0,
-            "rate": 0.0,
-            "fixed": 0.0,
-            "provider": provider,
-            "note": "Comision Izipay absorbida por el comercio.",
-            "tax_amount": 0.0,
-        }
-    if not settings.pass_culqi_fee_to_customer or amount <= 0:
-        return {
-            "fee": 0.0,
-            "rate": settings.culqi_online_rate,
-            "fixed": round(settings.culqi_online_fixed_usd * settings.culqi_exchange_rate, 2),
-            "provider": "culqi",
-            "note": "Comision Culqi absorbida por el comercio.",
-            "tax_amount": 0.0,
-        }
-
-    rate = max(0.0, float(settings.culqi_online_rate or 0.0))
-    fixed_pen = round(max(0.0, float(settings.culqi_online_fixed_usd or 0.0)) * max(0.0, float(settings.culqi_exchange_rate or 0.0)), 2)
-    min_fee = max(0.0, float(settings.culqi_min_fee_pen or 0.0))
-
-    # El umbral es el monto donde la comision por tasa alcanza al minimo. Si no
-    # se fuerza por variable de entorno se deduce, para que las dos ramas de
-    # abajo se junten sin salto y no haya un tercer numero que mantener.
-    threshold = max(0.0, float(settings.culqi_min_threshold_pen or 0.0))
-    if threshold <= 0 and rate > 0:
-        threshold = max(0.0, (min_fee - fixed_pen) / rate)
-
-    if amount < threshold:
-        fee = max(min_fee, round(amount * rate + fixed_pen, 2))
-        note = f"CulqiOnline nacional: minimo S/ {min_fee:.2f} para montos menores a S/ {threshold:.2f}; comision inafecta a IGV."
+        rate = max(0.0, float(settings.izipay_card_rate or 0.0))
+        fixed_pen = round(max(0.0, float(settings.izipay_card_fixed_pen or 0.0)), 2)
+        label = "Izipay" + (" (Yape)" if method == "yape" else " (tarjeta)")
+    elif method == "yape":
+        rate = max(0.0, float(settings.culqi_yape_rate or 0.0))
+        fixed_pen = 0.0
+        min_fee = max(0.0, float(settings.culqi_yape_min_fee_pen or 0.0))
+        if not settings.culqi_yape_apply_igv:
+            fee_igv = 0.0
+        label = "Culqi (Yape)"
     else:
-        fee = round(((amount + fixed_pen) / max(0.0001, 1 - rate)) - amount, 2)
-        note = f"CulqiOnline nacional: {rate * 100:.2f}% + USD {settings.culqi_online_fixed_usd:.2f}; comision inafecta a IGV."
+        rate = max(0.0, float(settings.culqi_online_rate or 0.0))
+        fixed_pen = round(max(0.0, float(settings.culqi_online_fixed_usd or 0.0)) * max(0.0, float(settings.culqi_exchange_rate or 0.0)), 2)
+        label = "Culqi (tarjeta)"
 
-    return {
-        "fee": fee,
-        "rate": rate,
-        "fixed": fixed_pen,
-        "provider": "culqi",
-        "note": note,
-        "tax_amount": 0.0,
-    }
+    note = f"{label}: {rate * 100:.2f}%"
+    if fixed_pen:
+        note += f" + S/ {fixed_pen:.2f}"
+    if fee_igv:
+        note += " + IGV"
+    if min_fee:
+        note += f", minimo S/ {min_fee:.2f} por pago"
+    note += "."
+
+    if amount <= 0:
+        return {"fee": 0.0, "rate": rate, "fixed": fixed_pen, "provider": provider, "note": note, "tax_amount": 0.0}
+
+    charged = (amount + fixed_pen * (1 + fee_igv)) / max(0.0001, 1 - rate * (1 + fee_igv))
+    fee = max(round(charged - amount, 2), round(min_fee, 2))
+    tax_amount = round(fee - fee / (1 + fee_igv), 2)
+    return {"fee": fee, "rate": rate, "fixed": fixed_pen, "provider": provider, "note": note, "tax_amount": tax_amount}
 
 
 def calculate_included_igv(taxable_total: float) -> dict[str, float]:
@@ -514,5 +510,51 @@ def calculate_delivery_fee(distance_km: float, fulfillment_type: str) -> float:
 
 
 def calculate_service_fee(base_amount: float) -> float:
-    """Tarifa de servicio = 3.6% del subtotal neto."""
-    return round(base_amount * float(settings.platform_service_fee_rate or 0.036), 2)
+    """Tarifa de servicio por tramos sobre el subtotal neto de productos.
+
+    12% sobre los primeros S/ 100 y 8% sobre lo que exceda de S/ 100
+    (S/ 150 -> 12.00 + 4.00 = S/ 16.00).
+    """
+    base = max(0.0, float(base_amount))
+    threshold = float(settings.service_fee_tier_threshold_pen)
+    low_part = min(base, threshold)
+    high_part = max(0.0, base - threshold)
+    fee = (
+        low_part * float(settings.service_fee_rate_up_to_threshold)
+        + high_part * float(settings.service_fee_rate_above_threshold)
+    )
+    return round(fee, 2)
+
+
+def multi_store_surcharge_rates() -> list[float]:
+    rates: list[float] = []
+    for part in str(settings.multi_store_delivery_surcharges or "").split(","):
+        part = part.strip()
+        if part:
+            rates.append(max(0.0, float(part)))
+    return rates
+
+
+def calculate_multi_store_surcharge(base_delivery_fee: float, branch_count: int) -> tuple[float, float]:
+    """Recargo al envio por los locales extra de un pedido: (monto, tasa acumulada).
+
+    Cada local extra suma su porcentaje del envio base (10%, 15%, 20%, 25%).
+    Lanza ValueError si el pedido trae mas locales de los permitidos.
+    """
+    extra = max(0, int(branch_count) - 1)
+    rates = multi_store_surcharge_rates()
+    if extra > len(rates):
+        raise ValueError(f"Un pedido puede juntar hasta {len(rates) + 1} locales.")
+    rate = round(sum(rates[:extra]), 4)
+    return round(max(0.0, float(base_delivery_fee)) * rate, 2), rate
+
+
+def effective_service_fee_rate(base_amount: float, service_fee: float) -> float:
+    """Porcentaje efectivo cobrado (tarifa / base), para guardar en la orden.
+
+    La columna es numeric(5,4), asi que se limita a 9.9999 por si un pedido
+    casi sin productos lleva una comision de tarjeta mayor que su base.
+    """
+    if base_amount <= 0:
+        return float(settings.service_fee_rate_up_to_threshold)
+    return min(9.9999, round(service_fee / base_amount, 4))

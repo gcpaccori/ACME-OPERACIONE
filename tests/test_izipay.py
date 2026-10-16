@@ -203,6 +203,24 @@ def test_proveedor_activo(monkeypatch):
     assert active_payment_provider() == "culqi"
 
 
+def test_yape_va_por_culqi_con_izipay(monkeypatch):
+    from config import payment_provider_for
+
+    monkeypatch.setattr(settings, "payment_provider", "izipay")
+    monkeypatch.setattr(settings, "culqi_public_key", "pk_live_x")
+    monkeypatch.setattr(settings, "culqi_private_key", "sk_live_x")
+    assert payment_provider_for("card") == "izipay"
+    assert payment_provider_for(None) == "izipay"
+    assert payment_provider_for("yape") == "culqi"
+
+    monkeypatch.setattr(settings, "culqi_private_key", "")
+    with pytest.raises(ValueError):
+        payment_provider_for("yape")
+
+    monkeypatch.setattr(settings, "payment_provider", "culqi")
+    assert payment_provider_for("yape") == "culqi"
+
+
 live = pytest.mark.skipif(
     not (os.getenv("IZIPAY_USERNAME") and str(os.getenv("IZIPAY_PASSWORD", "")).startswith("testpassword_")),
     reason="Sin claves de TEST de Izipay en el entorno",
