@@ -69,6 +69,11 @@ class Settings(BaseSettings):
     # 3.44% es la tarifa publicada; el fijo por operacion depende del contrato.
     izipay_card_rate: float = float(os.getenv("IZIPAY_CARD_RATE", "0.0344"))
     izipay_card_fixed_pen: float = float(os.getenv("IZIPAY_CARD_FIXED_PEN", "0"))
+    # Yape cobrado por Culqi: tasa sin IGV y comision minima por pago (el
+    # minimo pesa en compras chicas; con 3.44% + IGV se pasa del minimo a
+    # partir de unos S/ 82).
+    culqi_yape_rate: float = float(os.getenv("CULQI_YAPE_RATE", "0.0344"))
+    culqi_yape_min_fee_pen: float = float(os.getenv("CULQI_YAPE_MIN_FEE_PEN", "3.50"))
     
     # API
     api_host: str = os.getenv("API_HOST", "0.0.0.0")
@@ -93,8 +98,8 @@ class Settings(BaseSettings):
     culqi_online_rate: float = float(os.getenv("CULQI_ONLINE_RATE", "0.0344"))
     culqi_online_fixed_usd: float = float(os.getenv("CULQI_ONLINE_FIXED_USD", "0.20"))
     culqi_exchange_rate: float = float(os.getenv("CULQI_EXCHANGE_RATE", "3.85"))
-    # La comision de la tarjeta la paga el cliente, pero no como linea aparte:
-    # se suma dentro de la "Tarifa de servicio" (ver routes_courier_quote.py).
+    # La comision de la pasarela la paga el cliente en su propia linea
+    # ("Comision de pasarela"), calculada segun el medio de pago elegido.
 
     @field_validator("debug", "skip_legacy_db_init", mode="before")
     @classmethod
