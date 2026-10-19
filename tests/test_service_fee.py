@@ -143,6 +143,9 @@ def test_pedido_con_dos_locales_crea_un_pedido_por_local(monkeypatch):
     ]
     assert groups[0]["total"] == 41.5 and groups[0]["locals_count"] == 2 and groups[0]["surcharge_rate"] == 0.1
     assert all(o["order_group_id"] == groups[0]["id"] for o in orders)
+    # order_groups_status_check rechaza "pending_payment": el estado inicial
+    # lo pone la tabla.
+    assert "status" not in groups[0]
     items = [i for t, j in posts if t == "order_items" for i in j]
     assert {i["product_id"]: i["order_id"] for i in items} == {"p1": orders[0]["id"], "p2": orders[1]["id"]}
     assert result["order_id"] == orders[0]["id"]
