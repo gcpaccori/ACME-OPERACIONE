@@ -7,6 +7,7 @@ import logging
 
 import requests
 
+from services_courier_quote import calculate_multi_store_surcharge
 from config import settings
 
 logger = logging.getLogger(__name__)
@@ -156,17 +157,47 @@ class SupabaseOrderService:
                 logger.warning("No se pudo crear la direccion: %s", exc)
                 address_id = None
 
-        # Con varios locales, el pedido del primero lleva solo sus productos;
-        # los de cada otro local van en su propio pedido (mas abajo).
-        snapshot = quote.get("items_snapshot") or []
-        if any(str(item.get("branch_id") or branch_id) != branch_id for item in snapshot):
-            main_subtotal = round(sum(
-                float(item.get("line_total", 0) or 0)
-                for item in snapshot
-                if str(item.get("branch_id") or branch_id) == branch_id
-            ), 2)
+        # Pedido con productos de varios locales: se arma con el modelo de
+        # order_groups. Cada local recibe su pedido con sus productos; el ancla
+        # (group_position = 1, el primer local) lleva el envio con su recargo y
+        # los cargos de ACME, y el grupo se cobra entero en un solo pago.
+        items_by_branch: dict[str, list[dict[str, Any]]] = {branch_id: []}
+        for item in quote.get("items_snapshot") or []:
+            items_by_branch.setdefault(str(item.get("branch_id") or branch_id), []).append(item)
+        branch_subtotals = {
+            bid: round(sum(float(i.get("line_total", 0) or 0) for i in rows), 2)
+            for bid, rows in items_by_branch.items()
+        }
+        quote_total = float(quote.get("total", 0) or 0)
+        group_id: str | None = None
+        if len(items_by_branch) > 1:
+            main_subtotal = branch_subtotals[branch_id]
+            extras_total = round(sum(v for bid, v in branch_subtotals.items() if bid != branch_id), 2)
+            anchor_total = round(quote_total - extras_total, 2)
+            group_id = str(uuid4())
+            _, surcharge_rate = calculate_multi_store_surcharge(0, len(items_by_branch))
+            self._request(
+                "POST",
+                "order_groups",
+                bearer_token=bearer_token,
+                json={
+                    "id": group_id,
+                    "group_code": f"G-{group_id[:8].upper()}",
+                    "customer_id": customer_id,
+                    "status": "pending_payment",
+                    "locals_count": len(items_by_branch),
+                    "surcharge_rate": surcharge_rate,
+                    "delivery_fee": float(quote.get("delivery_fee", 0) or 0),
+                    "total": quote_total,
+                    "payment_status": "pending",
+                    "created_at": now,
+                    "updated_at": now,
+                },
+                prefer="return=minimal",
+            )
         else:
             main_subtotal = float(quote.get("subtotal", 0) or 0)
+            anchor_total = quote_total
 
         order_id = str(uuid4())
         order_payload = {
@@ -193,7 +224,7 @@ class SupabaseOrderService:
             "payment_processing_provider": quote.get("payment_processing_provider") or "culqi",
             "payment_processing_note": quote.get("payment_processing_note"),
             "payment_processing_tax_amount": float(quote.get("payment_processing_tax_amount", 0) or 0),
-            "total": float(quote.get("total", 0) or 0),
+            "total": anchor_total,
             "currency": "PEN",
             "quote_id": quote.get("id"),
             "fulfillment_type": fulfillment_type,
@@ -202,6 +233,10 @@ class SupabaseOrderService:
             "created_at": now,
             "updated_at": now,
         }
+
+        if group_id:
+            order_payload["order_group_id"] = group_id
+            order_payload["group_position"] = 1
 
         optional_order_columns = {
             "taxable_base",
@@ -250,24 +285,14 @@ class SupabaseOrderService:
         created_order = order_rows[0] if order_rows else order_payload
         initial_status = str(created_order.get("status") or order_payload["status"])
 
-        # Pedido con productos de varios locales: cada local recibe su propio
-        # pedido con sus productos, y el cobro completo vive en el del primer
-        # local. Los demas comparten quote_id y se liberan al pagarse ese.
-        items_by_branch: dict[str, list[dict[str, Any]]] = {}
-        for item in quote.get("items_snapshot") or []:
-            item_branch = str(item.get("branch_id") or branch_id)
-            items_by_branch.setdefault(item_branch, []).append(item)
-        items_by_branch.setdefault(branch_id, [])
-
         order_ids_by_branch: dict[str, str] = {branch_id: order_id}
-        for extra_branch_id in items_by_branch:
-            if extra_branch_id == branch_id:
-                continue
+        extra_branch_ids = [bid for bid in items_by_branch if bid != branch_id]
+        for position, extra_branch_id in enumerate(extra_branch_ids, start=2):
             extra_branch = self.get_branch(extra_branch_id, bearer_token)
             extra_merchant_id = str(extra_branch.get("merchant_id") or "")
             if not extra_merchant_id:
                 raise SupabaseOrderError(f"La sucursal '{extra_branch_id}' no tiene merchant_id.")
-            extra_subtotal = round(sum(float(i.get("line_total", 0) or 0) for i in items_by_branch[extra_branch_id]), 2)
+            extra_subtotal = branch_subtotals[extra_branch_id]
             extra_order_id = str(uuid4())
             extra_payload = {
                 **{key: 0.0 for key in (
@@ -286,10 +311,12 @@ class SupabaseOrderService:
                 "igv_rate": order_payload["igv_rate"],
                 "payment_processing_provider": order_payload["payment_processing_provider"],
                 "payment_processing_note": None,
-                # El cobro va en el pedido del primer local, para no contarlo dos veces.
-                "total": 0.0,
+                # Solo sus productos: el envio y los cargos van en el ancla.
+                "total": extra_subtotal,
                 "currency": "PEN",
                 "quote_id": quote.get("id"),
+                "order_group_id": group_id,
+                "group_position": position,
                 "fulfillment_type": fulfillment_type,
                 "special_instructions": delivery_data.get("special_instructions"),
                 "placed_at": now,

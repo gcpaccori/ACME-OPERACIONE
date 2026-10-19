@@ -55,7 +55,7 @@ def test_pago_libera_los_pedidos_de_los_otros_locales(monkeypatch):
     def fake_request(self, method, table, bearer_token=None, params=None, json=None, prefer=None):
         calls.append((method, table, dict(params or {}), json))
         if method == "GET" and params.get("id") == "eq.main":
-            return [{"id": "main", "quote_id": "q1", "payment_method_id": "pm"}]
+            return [{"id": "main", "order_group_id": "g1", "payment_method_id": "pm"}]
         if method == "GET":
             return [{"id": "extra", "payment_status": "pending"}]
         if method == "PATCH" and table == "orders" and params.get("status") == "eq.pending_payment":
@@ -70,6 +70,8 @@ def test_pago_libera_los_pedidos_de_los_otros_locales(monkeypatch):
     placed = [c[2]["id"] for c in calls if c[0] == "PATCH" and c[2].get("status") == "eq.pending_payment"]
     assert paid and paid[0][2]["id"] == "eq.extra"
     assert placed == ["eq.main", "eq.extra"]
+    group = [c for c in calls if c[1] == "order_groups"]
+    assert group and group[0][3]["payment_status"] == "paid"
 
 
 def test_cotizacion_con_dos_locales(monkeypatch):
@@ -134,8 +136,27 @@ def test_pedido_con_dos_locales_crea_un_pedido_por_local(monkeypatch):
     result = SupabaseOrderService().create_order_from_quote(quote, {"fulfillment_type": "delivery"}, "cliente")
 
     orders = [j for t, j in posts if t == "orders"]
-    assert [(o["branch_id"], o["subtotal"], o["total"]) for o in orders] == [("b1", 20.0, 41.5), ("b2", 10.0, 0.0)]
-    assert all(o["quote_id"] == "q1" for o in orders)
+    groups = [j for t, j in posts if t == "order_groups"]
+    # El ancla lleva el envio y los cargos; el otro local solo sus productos.
+    assert [(o["branch_id"], o["subtotal"], o["total"], o["group_position"]) for o in orders] == [
+        ("b1", 20.0, 31.5, 1), ("b2", 10.0, 10.0, 2),
+    ]
+    assert groups[0]["total"] == 41.5 and groups[0]["locals_count"] == 2 and groups[0]["surcharge_rate"] == 0.1
+    assert all(o["order_group_id"] == groups[0]["id"] for o in orders)
     items = [i for t, j in posts if t == "order_items" for i in j]
     assert {i["product_id"]: i["order_id"] for i in items} == {"p1": orders[0]["id"], "p2": orders[1]["id"]}
     assert result["order_id"] == orders[0]["id"]
+
+
+def test_el_ancla_cobra_el_total_del_grupo(monkeypatch):
+    from services_courier_payments import SupabaseCourierPayments
+
+    def fake_request(self, method, table, bearer_token=None, params=None, json=None, prefer=None):
+        if table == "orders":
+            return [{"id": "main", "total": 31.5, "order_group_id": "g1"}]
+        return [{"total": 41.5}]
+
+    monkeypatch.setattr(SupabaseCourierPayments, "__init__", lambda self: None)
+    monkeypatch.setattr(SupabaseCourierPayments, "_request", fake_request)
+    order = SupabaseCourierPayments().get_order("main")
+    assert order["total"] == 41.5 and order["order_total"] == 31.5

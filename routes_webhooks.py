@@ -278,12 +278,17 @@ def apply_verified_status(
     try:
         order_rows = _sb_get(
             "orders",
-            {"select": "id,total,payment_status", "id": f"eq.{order_id}", "limit": "1"},
+            {"select": "id,total,payment_status,order_group_id", "id": f"eq.{order_id}", "limit": "1"},
         )
         if not order_rows:
             logger.warning("culqi_webhook: pedido %s no existe", order_id)
             return None
         order = order_rows[0]
+        if order.get("order_group_id"):
+            # Pedido de varios locales: el pago cubre el grupo entero.
+            group_rows = _sb_get("order_groups", {"select": "total", "id": f"eq.{order['order_group_id']}", "limit": "1"})
+            if group_rows:
+                order["total"] = group_rows[0].get("total")
         current_status = order.get("payment_status")
 
         if new_status == "paid":

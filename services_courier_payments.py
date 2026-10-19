@@ -79,14 +79,26 @@ class SupabaseCourierPayments:
             "orders",
             bearer_token=bearer_token,
             params={
-                "select": "id,order_code,customer_id,total,currency,payment_status,payment_method_id,status",
+                "select": "id,order_code,customer_id,total,currency,payment_status,payment_method_id,status,order_group_id",
                 "id": f"eq.{order_id}",
                 "limit": "1",
             },
         )
         if not rows:
             raise SupabaseCourierError("Pedido courier no encontrado en Supabase.")
-        return rows[0]
+        order = rows[0]
+        if order.get("order_group_id"):
+            # Pedido de varios locales: se cobra el grupo entero desde el ancla.
+            groups = self._request(
+                "GET",
+                "order_groups",
+                bearer_token=bearer_token,
+                params={"select": "total", "id": f"eq.{order['order_group_id']}", "limit": "1"},
+            )
+            if groups:
+                order["order_total"] = order.get("total")
+                order["total"] = groups[0].get("total")
+        return order
 
     def get_profile(self, user_id: str | None, bearer_token: str | None = None) -> dict[str, Any] | None:
         if not user_id:
@@ -239,25 +251,26 @@ class SupabaseCourierPayments:
         return released
 
     def _release_group_orders(self, order_id: str, bearer_token: str | None = None) -> None:
-        """Un pedido con varios locales se paga una sola vez, en el pedido del
-        primer local; los pedidos de los demas comparten quote_id y pasan a
-        pagados y a operaciones junto con el."""
+        """Un pedido de varios locales (order_groups) se paga una sola vez, desde
+        el ancla; los pedidos de los demas locales pasan a pagados y a
+        operaciones junto con el, y el grupo queda confirmado."""
         rows = self._request(
             "GET",
             "orders",
             bearer_token=bearer_token,
-            params={"select": "id,quote_id,payment_method_id", "id": f"eq.{order_id}", "limit": "1"},
+            params={"select": "id,order_group_id,payment_method_id", "id": f"eq.{order_id}", "limit": "1"},
         )
-        if not rows or not rows[0].get("quote_id"):
+        if not rows or not rows[0].get("order_group_id"):
             return
         main = rows[0]
+        group_id = main["order_group_id"]
         siblings = self._request(
             "GET",
             "orders",
             bearer_token=bearer_token,
             params={
                 "select": "id,payment_status",
-                "quote_id": f"eq.{main['quote_id']}",
+                "order_group_id": f"eq.{group_id}",
                 "id": f"neq.{order_id}",
             },
         ) or []
@@ -271,6 +284,17 @@ class SupabaseCourierPayments:
                     bearer_token=bearer_token,
                 )
             self._release_one_paid_order(sibling_id, bearer_token)
+        self._request(
+            "PATCH",
+            "order_groups",
+            bearer_token=bearer_token,
+            params={"id": f"eq.{group_id}"},
+            json={
+                "payment_status": "paid",
+                "status": "confirmed",
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            },
+        )
 
     def _release_one_paid_order(self, order_id: str, bearer_token: str | None = None) -> bool:
         """
