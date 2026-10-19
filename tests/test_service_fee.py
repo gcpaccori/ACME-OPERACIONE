@@ -160,3 +160,14 @@ def test_el_ancla_cobra_el_total_del_grupo(monkeypatch):
     monkeypatch.setattr(SupabaseCourierPayments, "_request", fake_request)
     order = SupabaseCourierPayments().get_order("main")
     assert order["total"] == 41.5 and order["order_total"] == 31.5
+
+
+def test_los_otros_locales_no_se_cobran_solos(monkeypatch):
+    from services_courier_payments import SupabaseCourierPayments
+
+    def fake_request(self, method, table, bearer_token=None, params=None, json=None, prefer=None):
+        return [{"id": "extra", "total": 10.0, "order_group_id": "g1", "group_position": 2}]
+
+    monkeypatch.setattr(SupabaseCourierPayments, "__init__", lambda self: None)
+    monkeypatch.setattr(SupabaseCourierPayments, "_request", fake_request)
+    assert SupabaseCourierPayments().get_order("extra")["total"] == 0

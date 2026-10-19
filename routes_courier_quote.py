@@ -66,6 +66,8 @@ def create_courier_quote(
             item_branch = item.branch_id or payload.branch_id
             if item_branch not in branch_ids:
                 branch_ids.append(item_branch)
+        if not any((item.branch_id or payload.branch_id) == payload.branch_id for item in payload.items):
+            raise HTTPException(status_code=422, detail="El local del pedido no tiene productos en el carrito.")
         try:
             calculate_multi_store_surcharge(0, len(branch_ids))
         except ValueError as exc:

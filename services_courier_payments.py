@@ -79,7 +79,7 @@ class SupabaseCourierPayments:
             "orders",
             bearer_token=bearer_token,
             params={
-                "select": "id,order_code,customer_id,total,currency,payment_status,payment_method_id,status,order_group_id",
+                "select": "id,order_code,customer_id,total,currency,payment_status,payment_method_id,status,order_group_id,group_position",
                 "id": f"eq.{order_id}",
                 "limit": "1",
             },
@@ -87,7 +87,12 @@ class SupabaseCourierPayments:
         if not rows:
             raise SupabaseCourierError("Pedido courier no encontrado en Supabase.")
         order = rows[0]
-        if order.get("order_group_id"):
+        if order.get("order_group_id") and int(order.get("group_position") or 1) != 1:
+            # Los pedidos de los otros locales no se pagan solos: se cobran con
+            # el ancla. Sin monto, cualquier intento de cobro se rechaza.
+            order["order_total"] = order.get("total")
+            order["total"] = 0
+        elif order.get("order_group_id"):
             # Pedido de varios locales: se cobra el grupo entero desde el ancla.
             groups = self._request(
                 "GET",

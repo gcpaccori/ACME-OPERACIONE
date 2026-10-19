@@ -211,7 +211,9 @@ def admin_refund(
         raise HTTPException(status_code=400, detail="El pago no tiene referencia externa de Culqi.")
 
     # Determinar monto del reembolso
-    order_total = float(order.get("total") or payment.get("amount") or 0)
+    # Lo cobrado: en un pedido de varios locales el pago cubre el grupo
+    # entero, no solo el total del pedido ancla.
+    order_total = float(payment.get("amount") or order.get("total") or 0)
     refund_amount = float(payload.amount) if payload.amount is not None else order_total
     refund_amount_centimos = int(round(refund_amount * 100))
 
