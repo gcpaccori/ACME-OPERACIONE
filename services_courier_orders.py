@@ -409,5 +409,6 @@ class SupabaseOrderService:
         return {
             "order_id": order_id,
             "order_code": int(created_order.get("order_code") or 0),
-            "total": float(created_order.get("total") or quote.get("total", 0)),
+            # Con varios locales se paga el grupo entero, no solo el ancla.
+            "total": quote_total if group_id else float(created_order.get("total") or quote.get("total", 0)),
         }
