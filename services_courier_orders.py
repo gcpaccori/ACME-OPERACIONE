@@ -184,7 +184,10 @@ class SupabaseOrderService:
                     "id": group_id,
                     "group_code": f"G-{group_id[:8].upper()}",
                     "customer_id": customer_id,
-                    "status": "pending_payment",
+                    # Sin "status": order_groups tiene su propio CHECK de
+                    # estados (no acepta "pending_payment" como orders), asi
+                    # que se deja el valor por defecto de la tabla hasta que
+                    # el pago lo pase a "confirmed".
                     "locals_count": len(items_by_branch),
                     "surcharge_rate": surcharge_rate,
                     "delivery_fee": float(quote.get("delivery_fee", 0) or 0),
