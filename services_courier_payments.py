@@ -230,49 +230,6 @@ class SupabaseCourierPayments:
         )
 
     def release_paid_order(self, order_id: str, bearer_token: str | None = None) -> bool:
-        """Libera el pedido pagado y, si junto varios locales, los pedidos de los demas."""
-        released = self._release_one_paid_order(order_id, bearer_token)
-        try:
-            self._release_group_orders(order_id, bearer_token)
-        except SupabaseCourierError as exc:
-            logger.error("release_paid_order: no se pudieron liberar los otros locales de %s: %s", order_id, exc)
-        return released
-
-    def _release_group_orders(self, order_id: str, bearer_token: str | None = None) -> None:
-        """Un pedido con varios locales se paga una sola vez, en el pedido del
-        primer local; los pedidos de los demas comparten quote_id y pasan a
-        pagados y a operaciones junto con el."""
-        rows = self._request(
-            "GET",
-            "orders",
-            bearer_token=bearer_token,
-            params={"select": "id,quote_id,payment_method_id", "id": f"eq.{order_id}", "limit": "1"},
-        )
-        if not rows or not rows[0].get("quote_id"):
-            return
-        main = rows[0]
-        siblings = self._request(
-            "GET",
-            "orders",
-            bearer_token=bearer_token,
-            params={
-                "select": "id,payment_status",
-                "quote_id": f"eq.{main['quote_id']}",
-                "id": f"neq.{order_id}",
-            },
-        ) or []
-        for sibling in siblings:
-            sibling_id = str(sibling["id"])
-            if sibling.get("payment_status") != "paid":
-                self.update_order_payment(
-                    sibling_id,
-                    payment_method_id=main.get("payment_method_id"),
-                    payment_status="paid",
-                    bearer_token=bearer_token,
-                )
-            self._release_one_paid_order(sibling_id, bearer_token)
-
-    def _release_one_paid_order(self, order_id: str, bearer_token: str | None = None) -> bool:
         """
         Pasa a "placed" un pedido que esperaba pago, recien ahora que el pago se
         confirmo, para que entre a la cola de operaciones. Solo toca pedidos en
