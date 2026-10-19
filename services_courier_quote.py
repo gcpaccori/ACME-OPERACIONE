@@ -94,7 +94,7 @@ class SupabaseQuoteService:
             "products",
             bearer_token=bearer_token,
             params={
-                "select": "id,base_price,name,merchant_id",
+                "select": "id,base_price,name",
                 "id": f"in.({ids_csv})",
             },
         )
@@ -524,29 +524,6 @@ def calculate_service_fee(base_amount: float) -> float:
         + high_part * float(settings.service_fee_rate_above_threshold)
     )
     return round(fee, 2)
-
-
-def multi_store_surcharge_rates() -> list[float]:
-    rates: list[float] = []
-    for part in str(settings.multi_store_delivery_surcharges or "").split(","):
-        part = part.strip()
-        if part:
-            rates.append(max(0.0, float(part)))
-    return rates
-
-
-def calculate_multi_store_surcharge(base_delivery_fee: float, branch_count: int) -> tuple[float, float]:
-    """Recargo al envio por los locales extra de un pedido: (monto, tasa acumulada).
-
-    Cada local extra suma su porcentaje del envio base (10%, 15%, 20%, 25%).
-    Lanza ValueError si el pedido trae mas locales de los permitidos.
-    """
-    extra = max(0, int(branch_count) - 1)
-    rates = multi_store_surcharge_rates()
-    if extra > len(rates):
-        raise ValueError(f"Un pedido puede juntar hasta {len(rates) + 1} locales.")
-    rate = round(sum(rates[:extra]), 4)
-    return round(max(0.0, float(base_delivery_fee)) * rate, 2), rate
 
 
 def effective_service_fee_rate(base_amount: float, service_fee: float) -> float:
