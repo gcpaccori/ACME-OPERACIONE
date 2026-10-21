@@ -7,7 +7,8 @@ from services_courier_quote import calculate_payment_processing_fee, calculate_s
 def test_tarifa_por_tramos():
     assert calculate_service_fee(50) == 6.0
     assert calculate_service_fee(100) == 12.0
-    assert calculate_service_fee(150) == 16.0
+    assert calculate_service_fee(150) == 12.0
+    assert calculate_service_fee(100.01) == 8.0
 
 
 def test_comision_tarjeta_izipay_y_yape_culqi(monkeypatch):
