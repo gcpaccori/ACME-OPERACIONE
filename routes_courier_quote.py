@@ -16,6 +16,7 @@ from services_courier_quote import (
     calculate_road_distance_km,
     calculate_service_fee,
     effective_service_fee_rate,
+    is_service_fee_exempt_category,
     reverse_geocode_point,
     search_geocode_address,
 )
@@ -152,6 +153,14 @@ def create_courier_quote(
         price_map: dict[str, float] = {str(row["id"]): float(row["base_price"]) for row in products_rows}
         name_map: dict[str, str] = {str(row["id"]): str(row.get("name", "")) for row in products_rows}
         merchant_map: dict[str, str] = {str(row["id"]): str(row.get("merchant_id") or "") for row in products_rows}
+        category_map: dict[str, str] = {str(row["id"]): str(row.get("category_id") or "") for row in products_rows}
+
+        # Categorias que ACME distribuye (p. ej. bebidas): sus productos no pagan
+        # tarifa de servicio, asi que se excluyen de la base de esa tarifa.
+        category_rows = supabase.get_categories(list(category_map.values()), token)
+        exempt_category_ids: set[str] = {
+            str(row["id"]) for row in category_rows if is_service_fee_exempt_category(row.get("name"))
+        }
 
         # 6. Obtener deltas de modificadores
         all_modifier_ids: list[str] = []
@@ -166,6 +175,7 @@ def create_courier_quote(
 
         # 7. Calcular subtotal
         subtotal = 0.0
+        service_fee_exempt_subtotal = 0.0
         branch_subtotals: dict[str, float] = {}
         items_snapshot: list[dict[str, Any]] = []
         for item in payload.items:
@@ -186,6 +196,9 @@ def create_courier_quote(
             mod_total = sum(modifier_map.get(mid, 0.0) for mid in item.modifier_ids)
             line_total = (unit_price + mod_total) * item.quantity
             subtotal += line_total
+            is_fee_exempt = category_map.get(pid, "") in exempt_category_ids
+            if is_fee_exempt:
+                service_fee_exempt_subtotal += line_total
             branch_subtotals[item_branch] = branch_subtotals.get(item_branch, 0.0) + line_total
             items_snapshot.append({
                 "branch_id": item_branch,
@@ -196,19 +209,24 @@ def create_courier_quote(
                 "modifier_delta": mod_total,
                 "quantity": item.quantity,
                 "line_total": round(line_total, 2),
+                "service_fee_exempt": is_fee_exempt,
             })
 
         subtotal = round(subtotal, 2)
+        service_fee_exempt_subtotal = round(service_fee_exempt_subtotal, 2)
 
         # 8. Descuento (por ahora siempre 0)
         discount = 0.0
 
-        # 9. Base para tarifa de servicio
+        # 9. Base para tarifa de servicio. El cliente paga el precio completo de
+        # los productos (incluye bebidas), pero las categorias que ACME distribuye
+        # no suman a la base de la tarifa de servicio.
         base = subtotal - discount
+        service_fee_base = max(0.0, round(base - service_fee_exempt_subtotal, 2))
 
         # 10. Tarifa ACME: 12% hasta S/ 100; mas de S/ 100, 8% sobre todo
-        service_fee = calculate_service_fee(base)
-        service_fee_rate = effective_service_fee_rate(base, service_fee)
+        service_fee = calculate_service_fee(service_fee_base)
+        service_fee_rate = effective_service_fee_rate(service_fee_base, service_fee)
 
         # 11. Tip
         tip_amount = round(float(payload.tip_amount), 2)

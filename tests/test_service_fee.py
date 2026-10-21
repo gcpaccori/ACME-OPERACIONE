@@ -1,7 +1,12 @@
 import pytest
 
 from config import settings
-from services_courier_quote import calculate_payment_processing_fee, calculate_service_fee
+from services_courier_quote import (
+    calculate_payment_processing_fee,
+    calculate_service_fee,
+    is_service_fee_exempt_category,
+    service_fee_exempt_category_names,
+)
 
 
 def test_tarifa_por_tramos():
@@ -9,6 +14,27 @@ def test_tarifa_por_tramos():
     assert calculate_service_fee(100) == 12.0
     assert calculate_service_fee(150) == 12.0
     assert calculate_service_fee(100.01) == 8.0
+
+
+def test_categoria_bebidas_exenta_de_tarifa():
+    # Nombre configurado por defecto: "bebidas", sin distinguir mayusculas ni tildes.
+    assert "bebidas" in service_fee_exempt_category_names()
+    assert is_service_fee_exempt_category("Bebidas") is True
+    assert is_service_fee_exempt_category("BEBIDAS") is True
+    assert is_service_fee_exempt_category(" bebidas ") is True
+    assert is_service_fee_exempt_category("Comida") is False
+    assert is_service_fee_exempt_category(None) is False
+
+
+def test_base_de_tarifa_excluye_bebidas():
+    # Pedido de S/ 150 con S/ 60 en bebidas: la tarifa de servicio se calcula
+    # solo sobre los S/ 90 restantes (<= S/ 100 -> 12%).
+    base_total = 150.0
+    bebidas = 60.0
+    service_fee_base = round(base_total - bebidas, 2)
+    assert calculate_service_fee(service_fee_base) == round(90.0 * 0.12, 2) == 10.8
+    # Si todo el pedido son bebidas, no hay tarifa de servicio.
+    assert calculate_service_fee(0.0) == 0.0
 
 
 def test_comision_tarjeta_izipay_y_yape_culqi(monkeypatch):
