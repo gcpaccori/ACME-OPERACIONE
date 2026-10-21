@@ -94,9 +94,9 @@ class Settings(BaseSettings):
     geocoding_search_api_url: str = os.getenv("GEOCODING_SEARCH_API_URL", "https://nominatim.openstreetmap.org/search")
     geocoding_user_agent: str = os.getenv("GEOCODING_USER_AGENT", "ACME-Courier-Huancavelica/1.0")
     geocoding_timeout_seconds: float = float(os.getenv("GEOCODING_TIMEOUT_SECONDS", "5.0"))
-    # Tarifa de servicio por tramos sobre el precio de los productos: 12% hasta
-    # S/ 100 y 8% solo sobre lo que pasa de S/ 100. Asi un pedido de S/ 101
-    # nunca paga menos tarifa que uno de S/ 100.
+    # Tarifa de servicio sobre el precio de los productos: 12% hasta S/ 100 y,
+    # si pasan de S/ 100, 8% sobre todo el monto (regla del negocio: un pedido
+    # de S/ 101 paga S/ 8.08, menos que uno de S/ 100).
     service_fee_tier_threshold_pen: float = float(os.getenv("SERVICE_FEE_TIER_THRESHOLD_PEN", "100"))
     service_fee_rate_up_to_threshold: float = float(os.getenv("SERVICE_FEE_RATE_UP_TO_THRESHOLD", "0.12"))
     service_fee_rate_above_threshold: float = float(os.getenv("SERVICE_FEE_RATE_ABOVE_THRESHOLD", "0.08"))

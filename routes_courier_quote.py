@@ -206,7 +206,7 @@ def create_courier_quote(
         # 9. Base para tarifa de servicio
         base = subtotal - discount
 
-        # 10. Tarifa ACME por tramos (12% hasta S/ 100, 8% sobre el exceso)
+        # 10. Tarifa ACME: 12% hasta S/ 100; mas de S/ 100, 8% sobre todo
         service_fee = calculate_service_fee(base)
         service_fee_rate = effective_service_fee_rate(base, service_fee)
 

@@ -510,20 +510,18 @@ def calculate_delivery_fee(distance_km: float, fulfillment_type: str) -> float:
 
 
 def calculate_service_fee(base_amount: float) -> float:
-    """Tarifa de servicio por tramos sobre el subtotal neto de productos.
+    """Tarifa de servicio sobre el subtotal neto de productos.
 
-    12% sobre los primeros S/ 100 y 8% sobre lo que exceda de S/ 100
-    (S/ 150 -> 12.00 + 4.00 = S/ 16.00).
+    12% si los productos suman hasta S/ 100; si pasan de S/ 100, 8% sobre todo
+    el monto, sin tramo de 12% (S/ 150 -> S/ 12.00).
     """
     base = max(0.0, float(base_amount))
     threshold = float(settings.service_fee_tier_threshold_pen)
-    low_part = min(base, threshold)
-    high_part = max(0.0, base - threshold)
-    fee = (
-        low_part * float(settings.service_fee_rate_up_to_threshold)
-        + high_part * float(settings.service_fee_rate_above_threshold)
-    )
-    return round(fee, 2)
+    if base > threshold:
+        rate = float(settings.service_fee_rate_above_threshold)
+    else:
+        rate = float(settings.service_fee_rate_up_to_threshold)
+    return round(base * rate, 2)
 
 
 def multi_store_surcharge_rates() -> list[float]:
