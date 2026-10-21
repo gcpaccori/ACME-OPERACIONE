@@ -4,6 +4,7 @@ from config import settings
 from services_courier_quote import (
     calculate_payment_processing_fee,
     calculate_service_fee,
+    effective_service_fee_rate,
     is_service_fee_exempt_category,
     service_fee_exempt_category_names,
 )
@@ -35,6 +36,13 @@ def test_base_de_tarifa_excluye_bebidas():
     assert calculate_service_fee(service_fee_base) == round(90.0 * 0.12, 2) == 10.8
     # Si todo el pedido son bebidas, no hay tarifa de servicio.
     assert calculate_service_fee(0.0) == 0.0
+
+
+def test_rate_efectivo_cero_cuando_no_hay_tarifa():
+    # Pedido todo bebidas: base 0 y tarifa 0 -> el porcentaje efectivo es 0, no 12%.
+    assert effective_service_fee_rate(0.0, 0.0) == 0.0
+    # Con tarifa real si refleja el porcentaje.
+    assert effective_service_fee_rate(90.0, 10.8) == 0.12
 
 
 def test_comision_tarjeta_izipay_y_yape_culqi(monkeypatch):

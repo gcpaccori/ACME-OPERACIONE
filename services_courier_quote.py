@@ -590,7 +590,8 @@ def effective_service_fee_rate(base_amount: float, service_fee: float) -> float:
 
     La columna es numeric(5,4), asi que se limita a 9.9999 por si un pedido
     casi sin productos lleva una comision de tarjeta mayor que su base.
+    Si no hay tarifa (base 0 por ser todo bebidas, o tarifa 0), el efectivo es 0%.
     """
-    if base_amount <= 0:
-        return float(settings.service_fee_rate_up_to_threshold)
+    if base_amount <= 0 or service_fee <= 0:
+        return 0.0
     return min(9.9999, round(service_fee / base_amount, 4))
