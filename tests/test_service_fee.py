@@ -17,12 +17,16 @@ def test_tarifa_por_tramos():
     assert calculate_service_fee(100.01) == 8.0
 
 
-def test_categoria_bebidas_exenta_de_tarifa():
-    # Nombre configurado por defecto: "bebidas", sin distinguir mayusculas ni tildes.
-    assert "bebidas" in service_fee_exempt_category_names()
-    assert is_service_fee_exempt_category("Bebidas") is True
-    assert is_service_fee_exempt_category("BEBIDAS") is True
-    assert is_service_fee_exempt_category(" bebidas ") is True
+def test_categoria_bebidas_acme_exenta_de_tarifa():
+    # Por defecto se exenta la categoria "Bebidas ACME" (la que ACME distribuye
+    # en todas las tiendas), sin distinguir mayusculas ni tildes.
+    assert "bebidas acme" in service_fee_exempt_category_names()
+    assert is_service_fee_exempt_category("Bebidas ACME") is True
+    assert is_service_fee_exempt_category("BEBIDAS ACME") is True
+    assert is_service_fee_exempt_category(" Bebidas ACME ") is True
+    # Las bebidas propias del restaurante NO estan exentas.
+    assert is_service_fee_exempt_category("Bebidas") is False
+    assert is_service_fee_exempt_category("Gaseosas") is False
     assert is_service_fee_exempt_category("Comida") is False
     assert is_service_fee_exempt_category(None) is False
 

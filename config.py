@@ -100,12 +100,14 @@ class Settings(BaseSettings):
     service_fee_tier_threshold_pen: float = float(os.getenv("SERVICE_FEE_TIER_THRESHOLD_PEN", "100"))
     service_fee_rate_up_to_threshold: float = float(os.getenv("SERVICE_FEE_RATE_UP_TO_THRESHOLD", "0.12"))
     service_fee_rate_above_threshold: float = float(os.getenv("SERVICE_FEE_RATE_ABOVE_THRESHOLD", "0.08"))
-    # Categorias que ACME distribuye directamente (p. ej. bebidas): sus productos
-    # no suman a la base de la tarifa de servicio, asi que no pagan ese adicional.
-    # El cliente igual paga el precio del producto, el envio y la pasarela; solo
-    # se descuenta de ellos la tarifa de servicio. Nombres separados por coma,
-    # sin distinguir mayusculas ni tildes.
-    service_fee_exempt_categories: str = os.getenv("SERVICE_FEE_EXEMPT_CATEGORIES", "bebidas")
+    # Categorias que ACME distribuye directamente: sus productos no suman a la
+    # base de la tarifa de servicio, asi que no pagan ese adicional. El cliente
+    # igual paga el precio del producto, el envio y la pasarela; solo se descuenta
+    # de ellos la tarifa de servicio. Hoy es la categoria "Bebidas ACME", que esta
+    # en las 18 tiendas; los demas rubros de bebida (Gaseosas, Jugos, etc.) son del
+    # restaurante y si pagan tarifa. Nombres separados por coma, sin distinguir
+    # mayusculas ni tildes.
+    service_fee_exempt_categories: str = os.getenv("SERVICE_FEE_EXEMPT_CATEGORIES", "Bebidas ACME")
     igv_rate: float = float(os.getenv("IGV_RATE", "0.18"))
     culqi_online_rate: float = float(os.getenv("CULQI_ONLINE_RATE", "0.0344"))
     culqi_online_fixed_usd: float = float(os.getenv("CULQI_ONLINE_FIXED_USD", "0.20"))
