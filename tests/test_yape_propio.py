@@ -66,23 +66,26 @@ def applied(monkeypatch):
     return calls
 
 
-def test_solo_yape_y_montos_chicos(monkeypatch):
-    assert yape_propio_aplica("yape", 8772)
-    assert not yape_propio_aplica("yape", 8773)
+def test_solo_yape_directo_y_montos_chicos(monkeypatch):
+    assert yape_propio_aplica("yape_directo", 8772)
+    assert not yape_propio_aplica("yape_directo", 8773)
     assert not yape_propio_aplica("card", 500)
+    # "yape" es Yape por Culqi: el metodo propio solo se usa si el cliente lo elige.
+    assert not yape_propio_aplica("yape", 500)
     # Sin el secreto del webhook ningun pago se confirmaria: queda apagada.
     monkeypatch.setattr(settings, "yape_propio_webhook_secreto", "")
-    assert not yape_propio_aplica("yape", 500)
+    assert not yape_propio_aplica("yape_directo", 500)
     monkeypatch.setattr(settings, "yape_propio_webhook_secreto", SECRETO)
     monkeypatch.setattr(settings, "yape_propio_url", "")
-    assert not yape_propio_aplica("yape", 500)
+    assert not yape_propio_aplica("yape_directo", 500)
 
 
 def test_cotizacion_sin_comision_hasta_el_limite():
-    chico = calculate_payment_processing_fee(25.50, "yape")
+    chico = calculate_payment_processing_fee(25.50, "yape_directo")
     assert chico["fee"] == 0.0 and chico["provider"] == "yape_propio"
-    grande = calculate_payment_processing_fee(150.0, "yape")
+    grande = calculate_payment_processing_fee(150.0, "yape_directo")
     assert grande["provider"] != "yape_propio" and grande["fee"] > 0
+    assert calculate_payment_processing_fee(25.50, "yape")["provider"] != "yape_propio"
     assert calculate_payment_processing_fee(25.50, "card")["provider"] != "yape_propio"
 
 
@@ -144,14 +147,15 @@ class FakeSupabase:
         pass
 
 
-def _pedir(monkeypatch, total: float, abrir, method: str = "yape", quoted_method: str | None = None):
+def _pedir(monkeypatch, total: float, abrir, method: str = "yape_directo", quoted_method: str | None = None,
+           nombre: str | None = None):
     fake = FakeSupabase(total, quoted_method)
     monkeypatch.setattr(routes_courier_payments, "SupabaseCourierPayments", lambda: fake)
     monkeypatch.setattr(routes_courier_payments, "verify_supabase_user", lambda token: "user-1")
     monkeypatch.setattr(services_yape_propio, "abrir_sesion", abrir)
     res = TestClient(app).post(
         "/api/courier/payments/order",
-        json={"order_id": ORDER_ID, "payment_method": method},
+        json={"order_id": ORDER_ID, "payment_method": method, "nombre_pagador_yape": nombre},
         headers={"Authorization": "Bearer t"},
     )
     return res, fake
@@ -160,26 +164,26 @@ def _pedir(monkeypatch, total: float, abrir, method: str = "yape", quoted_method
 def test_order_abre_sesion_yape_propio(monkeypatch):
     llamadas = []
 
-    def abrir(referencia, cliente_id, monto):
-        llamadas.append((referencia, cliente_id, monto))
+    def abrir(referencia, cliente_id, monto, nombre_pagador=None):
+        llamadas.append((referencia, cliente_id, monto, nombre_pagador))
         return {"sesion_id": SESION_ID, "token": "tok", "monto_centimos": 2551, "monto_texto": "S/ 25.51",
                 "expira_en": "2026-10-22T16:00:00+00:00", "segundos_restantes": 60,
                 "yape": {"numero": "987654321", "titular": "ACME", "qr_url": "https://x/qr.png"}}
 
-    res, fake = _pedir(monkeypatch, 25.50, abrir)
+    res, fake = _pedir(monkeypatch, 25.50, abrir, nombre="Gabriel Ccansaya")
     assert res.status_code == 200, res.text
     data = res.json()
     assert data["provider"] == "yape_propio"
     assert data["monto_centimos"] == 2551
     assert data["yape_propio"]["token"] == "tok"
     assert data["yape_propio"]["api_url"] == "https://yape.acme.test"
-    assert llamadas == [(ORDER_ID, "user-1", 2550)]
+    assert llamadas == [(ORDER_ID, "user-1", 2550, "Gabriel Ccansaya")]
     assert fake.upserts[0]["provider"] == "yape_propio"
     assert fake.upserts[0]["external_reference"] == SESION_ID
 
 
 def test_order_avisa_si_el_receptor_no_esta(monkeypatch):
-    def abrir(*a):
+    def abrir(*a, **k):
         raise services_yape_propio.YapePropioError(503, "El celular que recibe los yapeos no esta conectado.",
                                                    "receptor_fuera_de_linea")
 
@@ -189,19 +193,22 @@ def test_order_avisa_si_el_receptor_no_esta(monkeypatch):
 
 
 def test_order_grande_no_usa_yape_propio(monkeypatch):
-    def abrir(*a):
+    def abrir(*a, **k):
         raise AssertionError("no deberia abrir sesion propia")
 
     monkeypatch.setattr(settings, "payment_provider", "culqi")
     monkeypatch.setattr(routes_courier_payments.culqi_service, "obtener_orden", lambda ref: {})
     monkeypatch.setattr(routes_courier_payments.culqi_service, "crear_orden_checkout",
                         lambda **k: {"exito": True, "order_id": "ord_1", "monto_centimos": 15000})
-    res, fake = _pedir(monkeypatch, 150.0, abrir)
+    res, fake = _pedir(monkeypatch, 150.0, abrir, method="yape")
     assert res.status_code == 200, res.text
     assert res.json()["provider"] == "culqi"
+    # Si aun asi pide Yape directo por encima del limite, se le avisa en vez de cobrarle comision.
+    res, _ = _pedir(monkeypatch, 150.0, abrir)
+    assert res.status_code == 409
 
 
-def _sesion_ok(*a):
+def _sesion_ok(*a, **k):
     return {"sesion_id": SESION_ID, "token": "tok", "monto_centimos": 2550, "monto_texto": "S/ 25.50",
             "expira_en": None, "segundos_restantes": 60,
             "yape": {"numero": "987654321", "titular": "ACME", "qr_url": ""}}
@@ -209,22 +216,42 @@ def _sesion_ok(*a):
 
 def test_cotizado_con_yape_no_se_cobra_con_tarjeta(monkeypatch):
     """Un total sin comision (cotizado con Yape propio) no puede abrirse como cobro con tarjeta."""
-    res, fake = _pedir(monkeypatch, 25.50, _sesion_ok, method="card", quoted_method="yape")
+    res, fake = _pedir(monkeypatch, 25.50, _sesion_ok, method="card", quoted_method="yape_directo")
     assert res.status_code == 200, res.text
     assert res.json()["provider"] == "yape_propio"
 
 
 def test_cotizado_con_tarjeta_no_usa_yape_propio(monkeypatch):
-    def abrir(*a):
+    def abrir(*a, **k):
         raise AssertionError("no deberia abrir sesion propia")
 
     monkeypatch.setattr(settings, "payment_provider", "culqi")
     monkeypatch.setattr(routes_courier_payments.culqi_service, "obtener_orden", lambda ref: {})
     monkeypatch.setattr(routes_courier_payments.culqi_service, "crear_orden_checkout",
                         lambda **k: {"exito": True, "order_id": "ord_1", "monto_centimos": 2550})
-    res, _ = _pedir(monkeypatch, 25.50, abrir, method="yape", quoted_method="card")
+    res, _ = _pedir(monkeypatch, 25.50, abrir, method="yape_directo", quoted_method="card")
     assert res.status_code == 200, res.text
     assert res.json()["provider"] == "culqi"
+
+
+def test_yape_por_culqi_no_usa_yape_propio(monkeypatch):
+    def abrir(*a, **k):
+        raise AssertionError("no deberia abrir sesion propia")
+
+    monkeypatch.setattr(settings, "payment_provider", "culqi")
+    monkeypatch.setattr(routes_courier_payments.culqi_service, "obtener_orden", lambda ref: {})
+    monkeypatch.setattr(routes_courier_payments.culqi_service, "crear_orden_checkout",
+                        lambda **k: {"exito": True, "order_id": "ord_1", "monto_centimos": 2550})
+    res, _ = _pedir(monkeypatch, 25.50, abrir, method="yape")
+    assert res.status_code == 200, res.text
+    assert res.json()["provider"] == "culqi"
+
+
+def test_yape_directo_no_disponible_avisa(monkeypatch):
+    monkeypatch.setattr(settings, "yape_propio_url", "")
+    res, _ = _pedir(monkeypatch, 25.50, _sesion_ok)
+    assert res.status_code == 409
+    assert "Yape directo" in res.json()["detail"]
 
 
 def test_reembolso_yape_propio_se_registra_manual(monkeypatch):

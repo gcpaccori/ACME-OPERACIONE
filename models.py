@@ -108,9 +108,12 @@ class CourierPaymentOrderRequest(BaseModel):
     nombre_cliente: Optional[str] = None
     telefono_cliente: Optional[str] = None
     descripcion: Optional[str] = None
-    # "card" o "yape". Con "yape" el pago va por Culqi aunque la pasarela
-    # activa sea Izipay, mientras Izipay no tenga Yape en la tienda.
-    payment_method: Optional[Literal["card", "yape"]] = None
+    # "card", "yape" o "yape_directo". Con "yape" el pago va por Culqi aunque
+    # la pasarela activa sea Izipay, mientras Izipay no tenga Yape en la tienda.
+    # "yape_directo" (solo la web) va por la pasarela Yape propia, sin comision.
+    payment_method: Optional[Literal["card", "yape", "yape_directo"]] = None
+    # Con Yape directo: a nombre de quien esta el Yape del cliente.
+    nombre_pagador_yape: Optional[str] = Field(default=None, max_length=120)
 
 class CourierPaymentOrderResponse(BaseModel):
     order_id: str

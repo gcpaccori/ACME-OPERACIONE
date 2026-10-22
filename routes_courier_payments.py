@@ -19,7 +19,7 @@ from models import (
     IzipayDemoResponse,
     IzipaySdkConfirmRequest,
 )
-from config import payment_provider_for, settings, yape_propio_aplica
+from config import METODO_YAPE_DIRECTO, payment_provider_for, settings, yape_propio_aplica
 from services_courier_payments import SupabaseCourierError, SupabaseCourierPayments
 from services_culqi import CulqiService
 from services_izipay import (
@@ -189,12 +189,14 @@ def create_courier_payment_order(
         # por Yape propio aunque se pida otro medio: si no, se abriria un cobro
         # con tarjeta por un total sin la comision de la tarjeta.
         quoted_method = supabase.get_quote_payment_method(order.get("quote_id"), token)
-        if quoted_method is not None:
-            usar_yape_propio = quoted_method == "yape" and yape_propio_aplica("yape", amount)
-        else:
-            usar_yape_propio = yape_propio_aplica(payload.payment_method, amount)
-        if usar_yape_propio:
-            return _open_yape_propio_payment(supabase, order, token=token, amount=amount, started_at=started_at)
+        metodo = quoted_method if quoted_method is not None else payload.payment_method
+        if yape_propio_aplica(metodo, amount):
+            return _open_yape_propio_payment(supabase, order, token=token, amount=amount, started_at=started_at,
+                                             nombre_pagador=payload.nombre_pagador_yape)
+        if metodo == METODO_YAPE_DIRECTO:
+            # Cotizado sin comision para Yape directo, pero la pasarela propia ya
+            # no aplica: cobrarlo por otra pasarela dejaria la comision sin cubrir.
+            raise HTTPException(status_code=409, detail="Yape directo no esta disponible ahora. Vuelve a cotizar con otro medio de pago.")
         try:
             provider = payment_provider_for(payload.payment_method)
         except ValueError as exc:
@@ -329,6 +331,7 @@ def _open_yape_propio_payment(
     token: str,
     amount: int,
     started_at: float,
+    nombre_pagador: str | None = None,
 ) -> CourierPaymentOrderResponse:
     """
     Abre el cobro con la pasarela Yape propia: el cliente yapea al numero de
@@ -338,7 +341,8 @@ def _open_yape_propio_payment(
     """
     order_id = str(order["id"])
     try:
-        sesion = services_yape_propio.abrir_sesion(order_id, str(order.get("customer_id") or "") or None, amount)
+        sesion = services_yape_propio.abrir_sesion(order_id, str(order.get("customer_id") or "") or None, amount,
+                                                   nombre_pagador=nombre_pagador)
     except YapePropioError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.mensaje) from exc
 

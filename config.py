@@ -168,10 +168,15 @@ def yape_propio_configurado() -> bool:
     return bool(settings.yape_propio_url and settings.yape_propio_api_key and settings.yape_propio_webhook_secreto)
 
 
+# Tercer medio de pago, solo en la web: Yape directo al numero de ACME por la
+# pasarela propia. "yape" sigue siendo el Yape cobrado por Culqi.
+METODO_YAPE_DIRECTO = "yape_directo"
+
+
 def yape_propio_aplica(method: str | None, amount_centimos: int) -> bool:
-    """Un pago con Yape va por la pasarela propia si esta activa y el monto es chico."""
+    """El pago va por la pasarela propia si se eligio Yape directo, esta activa y el monto es chico."""
     return (
-        method == "yape"
+        method == METODO_YAPE_DIRECTO
         and yape_propio_configurado()
         and 0 < int(amount_centimos) <= int(settings.yape_propio_max_centimos)
     )
