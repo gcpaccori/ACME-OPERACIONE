@@ -6,6 +6,7 @@ from services_courier_quote import (
     calculate_service_fee,
     effective_service_fee_rate,
     is_service_fee_exempt_category,
+    service_fee_base_amount,
     service_fee_exempt_category_names,
 )
 
@@ -31,19 +32,20 @@ def test_categoria_bebidas_acme_exenta_de_tarifa():
     assert is_service_fee_exempt_category(None) is False
 
 
-def test_base_de_tarifa_excluye_bebidas():
-    # Pedido de S/ 150 con S/ 60 en bebidas: la tarifa de servicio se calcula
-    # solo sobre los S/ 90 restantes (<= S/ 100 -> 12%).
-    base_total = 150.0
-    bebidas = 60.0
-    service_fee_base = round(base_total - bebidas, 2)
-    assert calculate_service_fee(service_fee_base) == round(90.0 * 0.12, 2) == 10.8
-    # Si todo el pedido son bebidas, no hay tarifa de servicio.
-    assert calculate_service_fee(0.0) == 0.0
+def test_base_de_tarifa_con_bebidas_acme():
+    # Mixto: pedido de S/ 150 con S/ 60 en Bebidas ACME -> la tarifa se calcula
+    # solo sobre los S/ 90 de los demas productos (<= S/ 100 -> 12%).
+    assert service_fee_base_amount(150.0, 60.0) == 90.0
+    assert calculate_service_fee(service_fee_base_amount(150.0, 60.0)) == 10.8
+    # Solo Bebidas ACME: pagan la tarifa sobre todo el monto (cubre mantenimiento).
+    assert service_fee_base_amount(150.0, 150.0) == 150.0
+    assert calculate_service_fee(service_fee_base_amount(150.0, 150.0)) == 12.0
+    # Sin bebidas: la base es el pedido completo.
+    assert service_fee_base_amount(80.0, 0.0) == 80.0
 
 
 def test_rate_efectivo_cero_cuando_no_hay_tarifa():
-    # Pedido todo bebidas: base 0 y tarifa 0 -> el porcentaje efectivo es 0, no 12%.
+    # Guarda defensiva: si no hay tarifa, el porcentaje efectivo es 0, no 12%.
     assert effective_service_fee_rate(0.0, 0.0) == 0.0
     # Con tarifa real si refleja el porcentaje.
     assert effective_service_fee_rate(90.0, 10.8) == 0.12

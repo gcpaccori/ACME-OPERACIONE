@@ -17,6 +17,7 @@ from services_courier_quote import (
     calculate_service_fee,
     effective_service_fee_rate,
     is_service_fee_exempt_category,
+    service_fee_base_amount,
     reverse_geocode_point,
     search_geocode_address,
 )
@@ -219,10 +220,11 @@ def create_courier_quote(
         discount = 0.0
 
         # 9. Base para tarifa de servicio. El cliente paga el precio completo de
-        # los productos (incluye bebidas), pero las categorias que ACME distribuye
-        # no suman a la base de la tarifa de servicio.
+        # los productos (incluye bebidas). Las Bebidas ACME no suman a la base de
+        # la tarifa cuando acompañan a otros productos; pero si el pedido es solo
+        # Bebidas ACME, si pagan la tarifa (cubre el mantenimiento de ACME).
         base = subtotal - discount
-        service_fee_base = max(0.0, round(base - service_fee_exempt_subtotal, 2))
+        service_fee_base = service_fee_base_amount(base, service_fee_exempt_subtotal)
 
         # 10. Tarifa ACME: 12% hasta S/ 100; mas de S/ 100, 8% sobre todo
         service_fee = calculate_service_fee(service_fee_base)

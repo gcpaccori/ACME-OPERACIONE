@@ -562,6 +562,20 @@ def is_service_fee_exempt_category(category_name: str | None) -> bool:
     return normalized in service_fee_exempt_category_names()
 
 
+def service_fee_base_amount(total_base: float, exempt_subtotal: float) -> float:
+    """Monto sobre el que se cobra la tarifa de servicio.
+
+    Las categorias exentas (Bebidas ACME) no suman a la tarifa cuando acompañan
+    a otros productos. Pero si el pedido es SOLO de esas categorias, si pagan la
+    tarifa sobre todo el monto: ese cobro cubre el mantenimiento de ACME
+    (combustible, filtros, electricidad, pasajes).
+    """
+    total = max(0.0, float(total_base))
+    exempt = max(0.0, float(exempt_subtotal))
+    non_exempt = round(total - exempt, 2)
+    return non_exempt if non_exempt > 0 else total
+
+
 def multi_store_surcharge_rates() -> list[float]:
     rates: list[float] = []
     for part in str(settings.multi_store_delivery_surcharges or "").split(","):
