@@ -5,6 +5,7 @@ from typing import Any
 from uuid import uuid4
 import logging
 import math
+import unicodedata
 
 import requests
 
@@ -94,7 +95,23 @@ class SupabaseQuoteService:
             "products",
             bearer_token=bearer_token,
             params={
-                "select": "id,base_price,name,merchant_id",
+                "select": "id,base_price,name,merchant_id,category_id",
+                "id": f"in.({ids_csv})",
+            },
+        )
+        return rows or []
+
+    def get_categories(self, category_ids: list[str], bearer_token: str | None = None) -> list[dict[str, Any]]:
+        ids = [cid for cid in dict.fromkeys(category_ids) if cid]
+        if not ids:
+            return []
+        ids_csv = ",".join(ids)
+        rows = self._request(
+            "GET",
+            "categories",
+            bearer_token=bearer_token,
+            params={
+                "select": "id,name",
                 "id": f"in.({ids_csv})",
             },
         )
@@ -524,6 +541,41 @@ def calculate_service_fee(base_amount: float) -> float:
     return round(base * rate, 2)
 
 
+def _normalize_category_name(value: str | None) -> str:
+    """Minusculas, sin tildes ni espacios sobrantes, para comparar nombres."""
+    text = unicodedata.normalize("NFKD", str(value or ""))
+    text = "".join(ch for ch in text if not unicodedata.combining(ch))
+    return text.strip().lower()
+
+
+def service_fee_exempt_category_names() -> set[str]:
+    """Nombres de categoria que no pagan tarifa de servicio (p. ej. bebidas)."""
+    raw = str(settings.service_fee_exempt_categories or "")
+    return {_normalize_category_name(part) for part in raw.split(",") if part.strip()}
+
+
+def is_service_fee_exempt_category(category_name: str | None) -> bool:
+    """True si la categoria esta exenta de la tarifa de servicio de ACME."""
+    normalized = _normalize_category_name(category_name)
+    if not normalized:
+        return False
+    return normalized in service_fee_exempt_category_names()
+
+
+def service_fee_base_amount(total_base: float, exempt_subtotal: float) -> float:
+    """Monto sobre el que se cobra la tarifa de servicio.
+
+    Las categorias exentas (Bebidas ACME) no suman a la tarifa cuando acompañan
+    a otros productos. Pero si el pedido es SOLO de esas categorias, si pagan la
+    tarifa sobre todo el monto: ese cobro cubre el mantenimiento de ACME
+    (combustible, filtros, electricidad, pasajes).
+    """
+    total = max(0.0, float(total_base))
+    exempt = max(0.0, float(exempt_subtotal))
+    non_exempt = round(total - exempt, 2)
+    return non_exempt if non_exempt > 0 else total
+
+
 def multi_store_surcharge_rates() -> list[float]:
     rates: list[float] = []
     for part in str(settings.multi_store_delivery_surcharges or "").split(","):
@@ -552,7 +604,8 @@ def effective_service_fee_rate(base_amount: float, service_fee: float) -> float:
 
     La columna es numeric(5,4), asi que se limita a 9.9999 por si un pedido
     casi sin productos lleva una comision de tarjeta mayor que su base.
+    Si no hay tarifa (base 0 por ser todo bebidas, o tarifa 0), el efectivo es 0%.
     """
-    if base_amount <= 0:
-        return float(settings.service_fee_rate_up_to_threshold)
+    if base_amount <= 0 or service_fee <= 0:
+        return 0.0
     return min(9.9999, round(service_fee / base_amount, 4))

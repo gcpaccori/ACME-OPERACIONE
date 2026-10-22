@@ -1,7 +1,14 @@
 import pytest
 
 from config import settings
-from services_courier_quote import calculate_payment_processing_fee, calculate_service_fee
+from services_courier_quote import (
+    calculate_payment_processing_fee,
+    calculate_service_fee,
+    effective_service_fee_rate,
+    is_service_fee_exempt_category,
+    service_fee_base_amount,
+    service_fee_exempt_category_names,
+)
 
 
 def test_tarifa_por_tramos():
@@ -9,6 +16,39 @@ def test_tarifa_por_tramos():
     assert calculate_service_fee(100) == 12.0
     assert calculate_service_fee(150) == 12.0
     assert calculate_service_fee(100.01) == 8.0
+
+
+def test_categoria_bebidas_acme_exenta_de_tarifa():
+    # Por defecto se exenta la categoria "Bebidas ACME" (la que ACME distribuye
+    # en todas las tiendas), sin distinguir mayusculas ni tildes.
+    assert "bebidas acme" in service_fee_exempt_category_names()
+    assert is_service_fee_exempt_category("Bebidas ACME") is True
+    assert is_service_fee_exempt_category("BEBIDAS ACME") is True
+    assert is_service_fee_exempt_category(" Bebidas ACME ") is True
+    # Las bebidas propias del restaurante NO estan exentas.
+    assert is_service_fee_exempt_category("Bebidas") is False
+    assert is_service_fee_exempt_category("Gaseosas") is False
+    assert is_service_fee_exempt_category("Comida") is False
+    assert is_service_fee_exempt_category(None) is False
+
+
+def test_base_de_tarifa_con_bebidas_acme():
+    # Mixto: pedido de S/ 150 con S/ 60 en Bebidas ACME -> la tarifa se calcula
+    # solo sobre los S/ 90 de los demas productos (<= S/ 100 -> 12%).
+    assert service_fee_base_amount(150.0, 60.0) == 90.0
+    assert calculate_service_fee(service_fee_base_amount(150.0, 60.0)) == 10.8
+    # Solo Bebidas ACME: pagan la tarifa sobre todo el monto (cubre mantenimiento).
+    assert service_fee_base_amount(150.0, 150.0) == 150.0
+    assert calculate_service_fee(service_fee_base_amount(150.0, 150.0)) == 12.0
+    # Sin bebidas: la base es el pedido completo.
+    assert service_fee_base_amount(80.0, 0.0) == 80.0
+
+
+def test_rate_efectivo_cero_cuando_no_hay_tarifa():
+    # Guarda defensiva: si no hay tarifa, el porcentaje efectivo es 0, no 12%.
+    assert effective_service_fee_rate(0.0, 0.0) == 0.0
+    # Con tarifa real si refleja el porcentaje.
+    assert effective_service_fee_rate(90.0, 10.8) == 0.12
 
 
 def test_comision_tarjeta_izipay_y_yape_culqi(monkeypatch):
