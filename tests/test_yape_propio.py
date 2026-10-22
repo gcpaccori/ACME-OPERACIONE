@@ -279,3 +279,52 @@ def test_reembolso_yape_propio_se_registra_manual(monkeypatch):
     assert patches[0][0] == "payments" and patches[0][1]["status"] == "refunded"
     assert patches[1][0] == "orders" and patches[1][1]["payment_status"] == "refunded"
     assert posts[0][1]["transaction_type"] == "refund"
+
+
+def _reclamo(monkeypatch, reclamar=None, estado=None, pagado=False, duenio="user-1"):
+    fake = FakeSupabase(20.0)
+    if pagado:
+        fake.get_order = lambda order_id, token: {"id": ORDER_ID, "customer_id": "user-1", "payment_status": "paid"}
+    monkeypatch.setattr(routes_courier_payments, "SupabaseCourierPayments", lambda: fake)
+    monkeypatch.setattr(routes_courier_payments, "verify_supabase_user", lambda token: duenio)
+    if reclamar:
+        monkeypatch.setattr(services_yape_propio, "reclamar", reclamar)
+    if estado:
+        monkeypatch.setattr(services_yape_propio, "estado_reclamo", estado)
+    return TestClient(app)
+
+
+def test_reclamo_lo_hace_solo_el_duenio_del_pedido(monkeypatch):
+    llamadas = []
+    cliente = _reclamo(monkeypatch, reclamar=lambda *a: llamadas.append(a) or {}, duenio="otro")
+    res = cliente.post("/api/courier/payments/yape-propio/reclamo", headers={"Authorization": "Bearer t"},
+                       json={"order_id": ORDER_ID, "codigo": "123", "monto_centimos": 2000})
+    assert res.status_code == 403 and llamadas == []
+
+
+def test_reclamo_pasa_codigo_y_monto_a_acme_yape(monkeypatch):
+    llamadas = []
+
+    def reclamar(referencia, codigo, monto, ip):
+        llamadas.append((referencia, codigo, monto))
+        return {"resultado": "aplicado", "mensaje": "Encontramos tu yapeo. Tu pedido ya esta pagado."}
+
+    cliente = _reclamo(monkeypatch, reclamar=reclamar)
+    res = cliente.post("/api/courier/payments/yape-propio/reclamo", headers={"Authorization": "Bearer t"},
+                       json={"order_id": ORDER_ID, "codigo": "123", "monto_centimos": 2000})
+    assert res.status_code == 200 and res.json()["resultado"] == "aplicado"
+    assert llamadas == [(ORDER_ID, "123", 2000)]
+
+
+def test_reclamo_valida_el_codigo_y_no_consulta_si_ya_esta_pagado(monkeypatch):
+    cliente = _reclamo(monkeypatch, reclamar=lambda *a: pytest.fail("no debe reclamar"),
+                       estado=lambda *a: pytest.fail("no debe consultar"), pagado=True)
+    malo = cliente.post("/api/courier/payments/yape-propio/reclamo", headers={"Authorization": "Bearer t"},
+                        json={"order_id": ORDER_ID, "codigo": "12a", "monto_centimos": 2000})
+    assert malo.status_code == 422
+    ok = cliente.post("/api/courier/payments/yape-propio/reclamo", headers={"Authorization": "Bearer t"},
+                      json={"order_id": ORDER_ID, "codigo": "123", "monto_centimos": 2000})
+    assert ok.json()["resultado"] == "pagada"
+    ver = cliente.get("/api/courier/payments/yape-propio/reclamo", params={"order_id": ORDER_ID},
+                      headers={"Authorization": "Bearer t"})
+    assert ver.json()["estado"] == "pagada"

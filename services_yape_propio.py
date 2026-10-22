@@ -56,6 +56,29 @@ def abrir_sesion(referencia: str, cliente_id: str | None, monto_centimos: int,
                           str(detalle or "No se pudo abrir el pago con Yape."))
 
 
+def _llamar(metodo: str, ruta: str, **kwargs) -> dict[str, Any]:
+    try:
+        resp = requests.request(metodo, f"{settings.yape_propio_url.rstrip('/')}{ruta}",
+                                headers={"X-Api-Key": settings.yape_propio_api_key}, timeout=10, **kwargs)
+    except requests.RequestException as exc:
+        raise YapePropioError(502, "El pago con Yape no esta disponible por ahora. Intenta en un momento.") from exc
+    if resp.status_code < 300:
+        return resp.json()
+    raise YapePropioError(502 if resp.status_code >= 500 else resp.status_code,
+                          "No se pudo consultar el reclamo de tu pago con Yape.")
+
+
+def estado_reclamo(referencia: str) -> dict[str, Any]:
+    """Si el pedido puede reclamar un yapeo no reconocido, o como quedo su reclamo."""
+    return _llamar("GET", "/v1/reclamos", params={"referencia": referencia})
+
+
+def reclamar(referencia: str, codigo: str, monto_centimos: int, ip: str | None) -> dict[str, Any]:
+    """Un solo reclamo por pedido: codigo de seguridad y monto de la constancia."""
+    return _llamar("POST", "/v1/reclamos", json={"referencia": referencia, "codigo": codigo,
+                                                  "monto_centimos": monto_centimos, "ip": ip})
+
+
 def firma_valida(timestamp: str | None, firma: str | None, cuerpo: bytes, ahora: float | None = None) -> bool:
     secreto = settings.yape_propio_webhook_secreto
     if not secreto or not timestamp or not firma:

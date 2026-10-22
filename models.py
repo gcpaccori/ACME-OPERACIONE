@@ -184,6 +184,13 @@ class CourierPaymentChargeRequest(BaseModel):
     email_cliente: Optional[EmailStr] = None
     nombre_cliente: Optional[str] = None
 
+class YapeReclamoRequest(BaseModel):
+    order_id: str
+    # Codigo de seguridad de 3 digitos y monto exacto de la constancia de Yape.
+    codigo: str = Field(pattern=r"^\d{3}$")
+    monto_centimos: int = Field(gt=0, le=10000000)
+
+
 class CourierPaymentSyncRequest(BaseModel):
     order_id: str
 

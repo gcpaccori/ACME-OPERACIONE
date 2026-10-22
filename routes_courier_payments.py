@@ -3,7 +3,7 @@ import logging
 import time
 import uuid
 
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, Header, HTTPException, Request
 
 from models import (
     CourierPaymentChargeRequest,
@@ -18,6 +18,7 @@ from models import (
     IzipayDemoConfirmResponse,
     IzipayDemoResponse,
     IzipaySdkConfirmRequest,
+    YapeReclamoRequest,
 )
 from config import METODO_YAPE_DIRECTO, payment_provider_for, settings, yape_propio_aplica
 from services_courier_payments import SupabaseCourierError, SupabaseCourierPayments
@@ -938,3 +939,53 @@ def sync_courier_payment(
         raise
     except SupabaseCourierError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+# ─── Reclamo autoatendido de Yape directo ────────────────────────────────────
+#
+# Si la ventana de pago cerro y el yapeo no se reconocio, el cliente tiene un
+# solo reclamo por pedido desde su pedido: codigo de seguridad y monto de la
+# constancia. acme-yape solo acepta yapeos hechos despues de abrir el cobro de
+# ese pedido. El pedido no se cancela por un reclamo fallido.
+
+def _pedido_del_cliente(order_id: str, authorization: str | None) -> dict:
+    token = bearer_token(authorization)
+    if not token:
+        raise HTTPException(status_code=401, detail="Inicia sesion para ver tu pedido.")
+    try:
+        uuid.UUID(order_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail="Pedido no encontrado.") from exc
+    try:
+        order = SupabaseCourierPayments().get_order(order_id, token)
+    except SupabaseCourierError as exc:
+        raise HTTPException(status_code=404, detail="Pedido no encontrado.") from exc
+    require_order_owner(token, order)
+    return order
+
+
+@router.get("/yape-propio/reclamo")
+def ver_reclamo_yape(order_id: str, authorization: str | None = Header(default=None)):
+    order = _pedido_del_cliente(order_id, authorization)
+    if str(order.get("payment_status") or "") == "paid":
+        return {"estado": "pagada", "puede_reclamar": False, "reclamo": None, "incidente_en": None}
+    try:
+        return services_yape_propio.estado_reclamo(str(order["id"]))
+    except YapePropioError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.mensaje) from exc
+
+
+@router.post("/yape-propio/reclamo")
+def reclamar_yape(payload: YapeReclamoRequest, request: Request, authorization: str | None = Header(default=None)):
+    order = _pedido_del_cliente(payload.order_id, authorization)
+    if str(order.get("payment_status") or "") == "paid":
+        return {"resultado": "pagada", "mensaje": "Tu pedido ya esta pagado.", "estado": "pagada",
+                "puede_reclamar": False, "reclamo": None, "incidente_en": None}
+    ip = (request.headers.get("x-forwarded-for") or "").split(",")[0].strip() or (
+        request.client.host if request.client else None)
+    try:
+        resultado = services_yape_propio.reclamar(str(order["id"]), payload.codigo, payload.monto_centimos, ip)
+    except YapePropioError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.mensaje) from exc
+    logger.info("yape_reclamo order_id=%s resultado=%s", order["id"], resultado.get("resultado"))
+    return resultado
