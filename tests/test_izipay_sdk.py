@@ -218,6 +218,9 @@ def test_order_endpoint_usa_sdk(monkeypatch):
         def get_online_payment_method_id(self, token):
             return "pm-1"
 
+        def get_quote_payment_method(self, quote_id, token):
+            return None
+
         def find_pending_payment(self, order_id, token, provider="culqi"):
             return None
 

@@ -79,7 +79,7 @@ class SupabaseCourierPayments:
             "orders",
             bearer_token=bearer_token,
             params={
-                "select": "id,order_code,customer_id,total,currency,payment_status,payment_method_id,status,order_group_id,group_position",
+                "select": "id,order_code,customer_id,total,currency,payment_status,payment_method_id,status,order_group_id,group_position,quote_id",
                 "id": f"eq.{order_id}",
                 "limit": "1",
             },
@@ -104,6 +104,18 @@ class SupabaseCourierPayments:
                 order["order_total"] = order.get("total")
                 order["total"] = groups[0].get("total")
         return order
+
+    def get_quote_payment_method(self, quote_id: str | None, bearer_token: str | None = None) -> str | None:
+        """Medio de pago con el que se cotizo el pedido (la comision del total depende de el)."""
+        if not quote_id:
+            return None
+        rows = self._request(
+            "GET",
+            "order_quotes",
+            bearer_token=bearer_token,
+            params={"select": "payment_method", "id": f"eq.{quote_id}", "limit": "1"},
+        )
+        return str(rows[0].get("payment_method") or "") or None if rows else None
 
     def get_profile(self, user_id: str | None, bearer_token: str | None = None) -> dict[str, Any] | None:
         if not user_id:

@@ -195,7 +195,7 @@ def admin_refund(
         {
             "select": "id,amount,currency,external_reference,status,provider",
             "order_id": f"eq.{payload.order_id}",
-            "provider": "in.(culqi,izipay,izipay_sdk)",
+            "provider": "in.(culqi,izipay,izipay_sdk,yape_propio)",
             "status": "eq.paid",
             "order": "requested_at.desc",
             "limit": "1",
@@ -222,6 +222,8 @@ def admin_refund(
 
     if provider in ("izipay", "izipay_sdk"):
         return _izipay_refund(payload, payment, provider, refund_amount, refund_amount_centimos)
+    if provider == "yape_propio":
+        return _yape_propio_refund(payload, payment, refund_amount)
 
     # Ejecutar reembolso en Culqi
     culqi_result = _culqi_refund(charge_id, refund_amount_centimos, payload.reason)
@@ -286,6 +288,47 @@ def admin_refund(
         refund_id=refund_id,
         amount=refund_amount,
         mensaje=f"Reembolso de S/ {refund_amount:.2f} procesado exitosamente.",
+    )
+
+
+def _yape_propio_refund(
+    payload: AdminRefundRequest,
+    payment: dict[str, Any],
+    refund_amount: float,
+) -> AdminRefundResponse:
+    """
+    Reembolso de un pago por Yape propio. El dinero llego directo a la cuenta
+    Yape de ACME, asi que no hay pasarela a la que pedirle la devolucion: el
+    admin le yapea el monto al cliente y aqui se registra.
+    """
+    now = datetime.now(timezone.utc).isoformat()
+    refund_id = f"yape-manual-{uuid4().hex[:12]}"
+    _sb_patch("payments", {"id": f"eq.{payment['id']}"}, {"status": "refunded", "updated_at": now})
+    _sb_patch("orders", {"id": f"eq.{payload.order_id}"}, {"payment_status": "refunded", "updated_at": now})
+    try:
+        _sb_post(
+            "payment_transactions",
+            {
+                "id": str(uuid4()),
+                "payment_id": payment["id"],
+                "transaction_type": "refund",
+                "amount": refund_amount,
+                "provider_transaction_id": refund_id,
+                "status": "refunded",
+                "request_json": {"sesion_id": payment.get("external_reference"), "reason": payload.reason,
+                                 "modo": "manual"},
+                "response_json": None,
+                "created_at": now,
+            },
+        )
+    except Exception as exc:
+        logger.warning("admin_refund: no se pudo insertar en payment_transactions: %s", exc)
+    logger.info("admin_refund_yape_propio order=%s amount=%.2f", payload.order_id, refund_amount)
+    return AdminRefundResponse(
+        exito=True,
+        refund_id=refund_id,
+        amount=refund_amount,
+        mensaje=f"Reembolso registrado. Yapea S/ {refund_amount:.2f} al cliente desde la cuenta Yape de ACME.",
     )
 
 

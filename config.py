@@ -115,6 +115,17 @@ class Settings(BaseSettings):
     # La comision de la pasarela la paga el cliente en su propia linea
     # ("Comision de pasarela"), calculada segun el medio de pago elegido.
 
+    # Pasarela Yape propia (repo acme-yape): QR + numero de ACME y un celular
+    # que reenvia las notificaciones de Yape. Se usa para los yapeos chicos, en
+    # los que Culqi cobra su comision minima; desde el monto maximo se sigue
+    # cobrando por Culqi o Izipay. Sin URL ni API key queda apagada.
+    yape_propio_url: str = os.getenv("YAPE_PROPIO_URL", "")
+    yape_propio_api_key: str = os.getenv("YAPE_PROPIO_API_KEY", "")
+    # Secreto con el que acme-yape firma el aviso de sesion pagada.
+    yape_propio_webhook_secreto: str = os.getenv("YAPE_PROPIO_WEBHOOK_SECRETO", "")
+    # Culqi cobra S/ 3.50 minimo a los yapeos menores de S/ 87.72.
+    yape_propio_max_centimos: int = int(os.getenv("YAPE_PROPIO_MAX_CENTIMOS", "8772"))
+
     @field_validator("debug", "skip_legacy_db_init", mode="before")
     @classmethod
     def parse_bool_like(cls, value):
@@ -149,6 +160,26 @@ def active_payment_provider() -> str:
 
 def culqi_configured() -> bool:
     return bool(settings.culqi_public_key and settings.culqi_private_key)
+
+
+def yape_propio_configurado() -> bool:
+    # Sin el secreto del webhook ningun aviso de pago se aceptaria: el cliente
+    # yapearia y su pedido quedaria sin pagar. Se exigen las tres variables.
+    return bool(settings.yape_propio_url and settings.yape_propio_api_key and settings.yape_propio_webhook_secreto)
+
+
+# Tercer medio de pago, solo en la web: Yape directo al numero de ACME por la
+# pasarela propia. "yape" sigue siendo el Yape cobrado por Culqi.
+METODO_YAPE_DIRECTO = "yape_directo"
+
+
+def yape_propio_aplica(method: str | None, amount_centimos: int) -> bool:
+    """El pago va por la pasarela propia si se eligio Yape directo, esta activa y el monto es chico."""
+    return (
+        method == METODO_YAPE_DIRECTO
+        and yape_propio_configurado()
+        and 0 < int(amount_centimos) <= int(settings.yape_propio_max_centimos)
+    )
 
 
 def payment_provider_for(method: str | None) -> str:
