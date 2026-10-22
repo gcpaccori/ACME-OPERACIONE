@@ -184,7 +184,16 @@ def create_courier_payment_order(
         amount = order_amount_centimos(order)
         if amount <= 0:
             raise HTTPException(status_code=400, detail="El pedido no tiene un monto valido para cobrar.")
-        if yape_propio_aplica(payload.payment_method, amount):
+        # El total ya trae (o no) la comision del medio con que se cotizo. Un
+        # pedido cotizado con Yape propio no lleva comision, asi que se cobra
+        # por Yape propio aunque se pida otro medio: si no, se abriria un cobro
+        # con tarjeta por un total sin la comision de la tarjeta.
+        quoted_method = supabase.get_quote_payment_method(order.get("quote_id"), token)
+        if quoted_method is not None:
+            usar_yape_propio = quoted_method == "yape" and yape_propio_aplica("yape", amount)
+        else:
+            usar_yape_propio = yape_propio_aplica(payload.payment_method, amount)
+        if usar_yape_propio:
             return _open_yape_propio_payment(supabase, order, token=token, amount=amount, started_at=started_at)
         try:
             provider = payment_provider_for(payload.payment_method)

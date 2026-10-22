@@ -163,7 +163,9 @@ def culqi_configured() -> bool:
 
 
 def yape_propio_configurado() -> bool:
-    return bool(settings.yape_propio_url and settings.yape_propio_api_key)
+    # Sin el secreto del webhook ningun aviso de pago se aceptaria: el cliente
+    # yapearia y su pedido quedaria sin pagar. Se exigen las tres variables.
+    return bool(settings.yape_propio_url and settings.yape_propio_api_key and settings.yape_propio_webhook_secreto)
 
 
 def yape_propio_aplica(method: str | None, amount_centimos: int) -> bool:

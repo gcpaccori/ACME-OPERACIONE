@@ -70,6 +70,10 @@ def test_solo_yape_y_montos_chicos(monkeypatch):
     assert yape_propio_aplica("yape", 8772)
     assert not yape_propio_aplica("yape", 8773)
     assert not yape_propio_aplica("card", 500)
+    # Sin el secreto del webhook ningun pago se confirmaria: queda apagada.
+    monkeypatch.setattr(settings, "yape_propio_webhook_secreto", "")
+    assert not yape_propio_aplica("yape", 500)
+    monkeypatch.setattr(settings, "yape_propio_webhook_secreto", SECRETO)
     monkeypatch.setattr(settings, "yape_propio_url", "")
     assert not yape_propio_aplica("yape", 500)
 
@@ -109,9 +113,13 @@ def test_webhook_sin_firma_o_vencido_no_aplica(applied):
 
 
 class FakeSupabase:
-    def __init__(self, total: float):
+    def __init__(self, total: float, quoted_method: str | None = None):
         self.total = total
+        self.quoted_method = quoted_method
         self.upserts = []
+
+    def get_quote_payment_method(self, quote_id, token):
+        return self.quoted_method
 
     def get_order(self, order_id, token):
         return {"id": ORDER_ID, "customer_id": "user-1", "total": self.total, "status": "pending_payment", "payment_status": "pending"}
@@ -136,14 +144,14 @@ class FakeSupabase:
         pass
 
 
-def _pedir(monkeypatch, total: float, abrir):
-    fake = FakeSupabase(total)
+def _pedir(monkeypatch, total: float, abrir, method: str = "yape", quoted_method: str | None = None):
+    fake = FakeSupabase(total, quoted_method)
     monkeypatch.setattr(routes_courier_payments, "SupabaseCourierPayments", lambda: fake)
     monkeypatch.setattr(routes_courier_payments, "verify_supabase_user", lambda token: "user-1")
     monkeypatch.setattr(services_yape_propio, "abrir_sesion", abrir)
     res = TestClient(app).post(
         "/api/courier/payments/order",
-        json={"order_id": ORDER_ID, "payment_method": "yape"},
+        json={"order_id": ORDER_ID, "payment_method": method},
         headers={"Authorization": "Bearer t"},
     )
     return res, fake
@@ -191,3 +199,56 @@ def test_order_grande_no_usa_yape_propio(monkeypatch):
     res, fake = _pedir(monkeypatch, 150.0, abrir)
     assert res.status_code == 200, res.text
     assert res.json()["provider"] == "culqi"
+
+
+def _sesion_ok(*a):
+    return {"sesion_id": SESION_ID, "token": "tok", "monto_centimos": 2550, "monto_texto": "S/ 25.50",
+            "expira_en": None, "segundos_restantes": 60,
+            "yape": {"numero": "987654321", "titular": "ACME", "qr_url": ""}}
+
+
+def test_cotizado_con_yape_no_se_cobra_con_tarjeta(monkeypatch):
+    """Un total sin comision (cotizado con Yape propio) no puede abrirse como cobro con tarjeta."""
+    res, fake = _pedir(monkeypatch, 25.50, _sesion_ok, method="card", quoted_method="yape")
+    assert res.status_code == 200, res.text
+    assert res.json()["provider"] == "yape_propio"
+
+
+def test_cotizado_con_tarjeta_no_usa_yape_propio(monkeypatch):
+    def abrir(*a):
+        raise AssertionError("no deberia abrir sesion propia")
+
+    monkeypatch.setattr(settings, "payment_provider", "culqi")
+    monkeypatch.setattr(routes_courier_payments.culqi_service, "obtener_orden", lambda ref: {})
+    monkeypatch.setattr(routes_courier_payments.culqi_service, "crear_orden_checkout",
+                        lambda **k: {"exito": True, "order_id": "ord_1", "monto_centimos": 2550})
+    res, _ = _pedir(monkeypatch, 25.50, abrir, method="yape", quoted_method="card")
+    assert res.status_code == 200, res.text
+    assert res.json()["provider"] == "culqi"
+
+
+def test_reembolso_yape_propio_se_registra_manual(monkeypatch):
+    import routes_admin_refunds
+
+    patches, posts = [], []
+
+    def fake_get(table, params):
+        if table == "orders":
+            return [{"id": ORDER_ID, "total": 25.5, "payment_status": "paid", "customer_id": "user-1"}]
+        if table == "payments":
+            assert "yape_propio" in params["provider"]
+            return [{"id": "pay-1", "amount": 25.5, "currency": "PEN", "external_reference": SESION_ID,
+                     "status": "paid", "provider": "yape_propio"}]
+        return []
+
+    monkeypatch.setattr(routes_admin_refunds, "_verify_admin", lambda token: "admin-1")
+    monkeypatch.setattr(routes_admin_refunds, "_sb_get", fake_get)
+    monkeypatch.setattr(routes_admin_refunds, "_sb_patch", lambda t, p, d: patches.append((t, d)))
+    monkeypatch.setattr(routes_admin_refunds, "_sb_post", lambda t, d: posts.append((t, d)))
+    res = TestClient(app).post("/api/admin/refunds", json={"order_id": ORDER_ID, "reason": "pedido cancelado"},
+                               headers={"Authorization": "Bearer admin"})
+    assert res.status_code == 200, res.text
+    assert "Yapea S/ 25.50" in res.json()["mensaje"]
+    assert patches[0][0] == "payments" and patches[0][1]["status"] == "refunded"
+    assert patches[1][0] == "orders" and patches[1][1]["payment_status"] == "refunded"
+    assert posts[0][1]["transaction_type"] == "refund"
