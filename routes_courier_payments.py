@@ -19,7 +19,7 @@ from models import (
     IzipayDemoResponse,
     IzipaySdkConfirmRequest,
 )
-from config import payment_provider_for, settings
+from config import payment_provider_for, settings, yape_propio_aplica
 from services_courier_payments import SupabaseCourierError, SupabaseCourierPayments
 from services_culqi import CulqiService
 from services_izipay import (
@@ -37,6 +37,8 @@ from services_izipay_sdk import (
     summarize_payload,
 )
 from services_supabase_auth import SupabaseAuthError, verify_supabase_user
+import services_yape_propio
+from services_yape_propio import YapePropioError
 from routes_webhooks import (
     CulqiUnavailable,
     apply_izipay_answer,
@@ -182,6 +184,8 @@ def create_courier_payment_order(
         amount = order_amount_centimos(order)
         if amount <= 0:
             raise HTTPException(status_code=400, detail="El pedido no tiene un monto valido para cobrar.")
+        if yape_propio_aplica(payload.payment_method, amount):
+            return _open_yape_propio_payment(supabase, order, token=token, amount=amount, started_at=started_at)
         try:
             provider = payment_provider_for(payload.payment_method)
         except ValueError as exc:
@@ -307,6 +311,74 @@ def create_courier_payment_order(
         raise
     except SupabaseCourierError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+def _open_yape_propio_payment(
+    supabase: SupabaseCourierPayments,
+    order: dict,
+    *,
+    token: str,
+    amount: int,
+    started_at: float,
+) -> CourierPaymentOrderResponse:
+    """
+    Abre el cobro con la pasarela Yape propia: el cliente yapea al numero de
+    ACME el monto exacto que devuelve la sesion (el total o unos centimos mas
+    si otro pago en curso tiene el mismo monto) antes de que venza la ventana.
+    El pedido sigue en espera de pago hasta que acme-yape avise por el webhook.
+    """
+    order_id = str(order["id"])
+    try:
+        sesion = services_yape_propio.abrir_sesion(order_id, str(order.get("customer_id") or "") or None, amount)
+    except YapePropioError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.mensaje) from exc
+
+    payment_method_id = supabase.get_online_payment_method_id(token)
+    existing = supabase.find_pending_payment(order_id, token, provider="yape_propio")
+    payment_id = supabase.upsert_pending_payment(
+        order,
+        payment_method_id=payment_method_id,
+        external_reference=sesion["sesion_id"],
+        bearer_token=token,
+        provider="yape_propio",
+    )
+    jobs = [
+        lambda: supabase.update_order_payment(
+            order_id,
+            payment_method_id=payment_method_id,
+            payment_status="pending",
+            bearer_token=token,
+        )
+    ]
+    if not existing or existing.get("external_reference") != sesion["sesion_id"]:
+        jobs.append(
+            lambda: supabase.insert_transaction(
+                payment_id=payment_id,
+                transaction_type="authorization",
+                amount=float(order.get("total") or 0),
+                status="pending",
+                provider_transaction_id=sesion["sesion_id"],
+                request_json={"order_id": order_id, "amount": amount, "currency": "PEN", "provider": "yape_propio"},
+                response_json={"monto_centimos": sesion.get("monto_centimos"), "expira_en": sesion.get("expira_en")},
+                bearer_token=token,
+            )
+        )
+    run_parallel(*jobs)
+    logger.info(
+        "courier_payment_yape_propio_ok order_id=%s monto=%s elapsed_ms=%s",
+        order_id,
+        sesion.get("monto_centimos"),
+        int((time.perf_counter() - started_at) * 1000),
+    )
+    return CourierPaymentOrderResponse(
+        order_id=sesion["sesion_id"],
+        courier_order_id=order_id,
+        payment_id=payment_id,
+        monto_centimos=int(sesion.get("monto_centimos") or amount),
+        mensaje="Yapea el monto exacto antes de que termine el tiempo.",
+        provider="yape_propio",
+        yape_propio={**sesion, "api_url": settings.yape_propio_url.rstrip("/")},
+    )
 
 
 def _open_izipay_payment(

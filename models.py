@@ -126,6 +126,9 @@ class CourierPaymentOrderResponse(BaseModel):
     mode: Optional[str] = None
     # SDK de Izipay ("izipay_sdk"): lo que necesita el checkout en el navegador.
     izipay_checkout: Optional[Dict[str, Any]] = None
+    # Yape propio ("yape_propio"): sesion con QR, numero, monto exacto a yapear
+    # y hasta cuando. La web consulta y sube la captura con sesion_id + token.
+    yape_propio: Optional[Dict[str, Any]] = None
 
 
 class IzipayConfirmRequest(BaseModel):

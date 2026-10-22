@@ -9,7 +9,7 @@ import unicodedata
 
 import requests
 
-from config import payment_provider_for, settings
+from config import payment_provider_for, settings, yape_propio_aplica
 from services_courier_tariffs import TariffZoneOverride, extract_zone_code
 
 logger = logging.getLogger(__name__)
@@ -361,6 +361,18 @@ def calculate_payment_processing_fee(amount: float, payment_method: str = "card"
     descuente su parte, llegue completo el monto original.
     """
     method = "yape" if payment_method == "yape" else "card"
+    if yape_propio_aplica(method, int(round(max(0.0, amount) * 100))):
+        # Yape directo al numero de ACME: no hay pasarela que cobre comision. Si
+        # el monto exacto esta ocupado por otro pago en curso, el cliente yapea
+        # hasta S/ 0.09 mas para distinguirlo; eso se cobra en el momento.
+        return {
+            "fee": 0.0,
+            "rate": 0.0,
+            "fixed": 0.0,
+            "provider": "yape_propio",
+            "note": "Yape directo a ACME: sin comision de pasarela.",
+            "tax_amount": 0.0,
+        }
     provider = payment_provider_for(method)
     igv = max(0.0, float(settings.igv_rate or 0.0))
     min_fee = 0.0

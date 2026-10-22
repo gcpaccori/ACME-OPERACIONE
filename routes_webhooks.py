@@ -22,6 +22,7 @@ from services_izipay import (
     summarize_answer,
 )
 from services_izipay_sdk import IzipaySdkService, izipay_order_number, summarize_payload
+from services_yape_propio import firma_valida as yape_propio_firma_valida
 
 router = APIRouter(prefix="/api/webhooks", tags=["webhooks"])
 logger = logging.getLogger(__name__)
@@ -554,3 +555,57 @@ async def izipay_sdk_ipn(request: Request):
         resumen.get("order_number"), resumen.get("code"), applied,
     )
     return {"received": True}
+
+
+def yape_propio_verified(evento: dict[str, Any]) -> dict[str, Any] | None:
+    """
+    Convierte el aviso firmado de acme-yape al formato de apply_verified_status.
+    El monto que se compara con el pedido es el base: los centimos extra que el
+    cliente yapeo para distinguir su pago son la comision de la pasarela.
+    """
+    if evento.get("evento") != "yape.sesion_pagada":
+        return None
+    referencia = str(evento.get("referencia") or "")
+    sesion_id = str(evento.get("sesion_id") or "")
+    if not referencia or not sesion_id:
+        return None
+    return {
+        "id": sesion_id,
+        "amount": int(evento.get("monto_base_centimos") or 0),
+        "metadata": {"pedido_id": referencia},
+        "transaction_uuid": sesion_id,
+        "raw": evento,
+    }
+
+
+@router.post("/yape-propio")
+async def yape_propio_webhook(request: Request):
+    """
+    Aviso de acme-yape cuando una sesion de cobro queda pagada (por la
+    notificacion del celular receptor, por el nombre del pagador o por la
+    captura del cliente). Solo se acepta con la firma HMAC del secreto
+    compartido, y el pago solo se aplica si el monto coincide con el pedido.
+    """
+    cuerpo = await request.body()
+    if not yape_propio_firma_valida(
+        request.headers.get("x-yape-timestamp"), request.headers.get("x-yape-firma"), cuerpo
+    ):
+        logger.warning("yape_propio_webhook: firma invalida")
+        return JSONResponse(status_code=401, content={"received": False})
+    try:
+        evento = json.loads(cuerpo.decode("utf-8") or "{}")
+    except ValueError:
+        evento = {}
+    verified = yape_propio_verified(evento if isinstance(evento, dict) else {})
+    if not verified:
+        return JSONResponse(status_code=400, content={"received": False})
+
+    applied = apply_verified_status("yape_propio.webhook", "paid", verified, provider="yape_propio")
+    logger.info(
+        "yape_propio_webhook sesion=%s pedido=%s metodo=%s applied=%s",
+        evento.get("sesion_id"), evento.get("referencia"), evento.get("metodo"), applied,
+    )
+    if applied != "paid":
+        # Monto distinto o error al guardar: acme-yape lo reintenta.
+        return JSONResponse(status_code=409, content={"received": True, "applied": applied})
+    return {"received": True, "applied": applied}
