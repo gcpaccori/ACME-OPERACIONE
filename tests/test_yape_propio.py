@@ -164,7 +164,7 @@ def _pedir(monkeypatch, total: float, abrir, method: str = "yape_directo", quote
 def test_order_abre_sesion_yape_propio(monkeypatch):
     llamadas = []
 
-    def abrir(referencia, cliente_id, monto, nombre_pagador=None):
+    def abrir(referencia, cliente_id, monto, nombre_pagador=None, nombre_cuenta=None):
         llamadas.append((referencia, cliente_id, monto, nombre_pagador))
         return {"sesion_id": SESION_ID, "token": "tok", "monto_centimos": 2551, "monto_texto": "S/ 25.51",
                 "expira_en": "2026-10-22T16:00:00+00:00", "segundos_restantes": 60,
