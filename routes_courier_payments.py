@@ -193,7 +193,8 @@ def create_courier_payment_order(
         metodo = quoted_method if quoted_method is not None else payload.payment_method
         if yape_propio_aplica(metodo, amount):
             return _open_yape_propio_payment(supabase, order, token=token, amount=amount, started_at=started_at,
-                                             nombre_pagador=payload.nombre_pagador_yape)
+                                             nombre_pagador=payload.nombre_pagador_yape,
+                                             nombre_cuenta=(profile or {}).get("full_name"))
         if metodo == METODO_YAPE_DIRECTO:
             # Cotizado sin comision para Yape directo, pero la pasarela propia ya
             # no aplica: cobrarlo por otra pasarela dejaria la comision sin cubrir.
@@ -333,6 +334,7 @@ def _open_yape_propio_payment(
     amount: int,
     started_at: float,
     nombre_pagador: str | None = None,
+    nombre_cuenta: str | None = None,
 ) -> CourierPaymentOrderResponse:
     """
     Abre el cobro con la pasarela Yape propia: el cliente yapea al numero de
@@ -341,9 +343,15 @@ def _open_yape_propio_payment(
     El pedido sigue en espera de pago hasta que acme-yape avise por el webhook.
     """
     order_id = str(order["id"])
+    # El nombre de su cuenta tambien identifica sus yapeos (reclamos y codigo).
+    if not nombre_cuenta and order.get("customer_id"):
+        try:
+            nombre_cuenta = (supabase.get_profile(order.get("customer_id"), token) or {}).get("full_name")
+        except Exception:
+            nombre_cuenta = None
     try:
         sesion = services_yape_propio.abrir_sesion(order_id, str(order.get("customer_id") or "") or None, amount,
-                                                   nombre_pagador=nombre_pagador)
+                                                   nombre_pagador=nombre_pagador, nombre_cuenta=nombre_cuenta)
     except YapePropioError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.mensaje) from exc
 

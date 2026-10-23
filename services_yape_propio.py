@@ -29,14 +29,15 @@ class YapePropioError(Exception):
 
 
 def abrir_sesion(referencia: str, cliente_id: str | None, monto_centimos: int,
-                 nombre_pagador: str | None = None) -> dict[str, Any]:
+                 nombre_pagador: str | None = None, nombre_cuenta: str | None = None) -> dict[str, Any]:
     """Abre (o reusa) la sesion de cobro del pedido en acme-yape."""
     try:
         resp = requests.post(
             f"{settings.yape_propio_url.rstrip('/')}/v1/sesiones",
             headers={"X-Api-Key": settings.yape_propio_api_key},
             json={"referencia": referencia, "cliente_id": cliente_id, "monto_centimos": monto_centimos,
-                  "nombre_pagador": (nombre_pagador or "").strip() or None},
+                  "nombre_pagador": (nombre_pagador or "").strip() or None,
+                  "nombre_cuenta": (nombre_cuenta or "").strip() or None},
             timeout=10,
         )
     except requests.RequestException as exc:
