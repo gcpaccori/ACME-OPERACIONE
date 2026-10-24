@@ -1,69 +1,111 @@
 {
   "city": "Huancavelica",
-  "coverage_area_km2": 19,
+  "coverage_area_km2": 21,
   "coverage": {
     "label": "Cobertura de atencion Huancavelica",
-    "source": "Puntos del dueño 22/10/2026 (chat WhatsApp)",
+    "source": "Puntos del dueño 22/10/2026 (chat WhatsApp) + franja sur del centro provisional",
     "points": [
       {
         "code": "COB_01",
         "label": "Cobertura 1",
-        "lat": -12.7926419,
-        "lng": -75.0410112
-      },
-      {
-        "code": "COB_02",
-        "label": "Cobertura 2",
         "lat": -12.7723896,
         "lng": -75.0253957
       },
       {
-        "code": "COB_03",
-        "label": "Cobertura 3",
+        "code": "COB_02",
+        "label": "Cobertura 2",
         "lat": -12.7707182,
         "lng": -75.008654
       },
       {
-        "code": "COB_04",
-        "label": "Cobertura 4",
+        "code": "COB_03",
+        "label": "Cobertura 3",
         "lat": -12.778888,
         "lng": -74.9844568
       },
       {
-        "code": "COB_05",
-        "label": "Cobertura 5",
+        "code": "COB_04",
+        "label": "Cobertura 4",
         "lat": -12.7779165,
         "lng": -74.958857
       },
       {
-        "code": "COB_06",
-        "label": "Cobertura 6",
+        "code": "COB_05",
+        "label": "Cobertura 5",
         "lat": -12.771038,
         "lng": -74.9303828
       },
       {
-        "code": "COB_07",
-        "label": "Cobertura 7",
+        "code": "COB_06",
+        "label": "Cobertura 6",
         "lat": -12.7730455,
         "lng": -74.9291616
       },
       {
-        "code": "COB_08",
-        "label": "Cobertura 8",
+        "code": "COB_07",
+        "label": "Cobertura 7",
         "lat": -12.800462,
         "lng": -74.9428152
       },
       {
+        "code": "COB_08",
+        "label": "Cobertura 8",
+        "lat": -12.7879839,
+        "lng": -74.956645
+      },
+      {
         "code": "COB_09",
         "label": "Cobertura 9",
-        "lat": -12.7854179,
-        "lng": -74.9594889
+        "lat": -12.7918243,
+        "lng": -74.9641272
       },
       {
         "code": "COB_10",
         "label": "Cobertura 10",
+        "lat": -12.7922396,
+        "lng": -74.9715419
+      },
+      {
+        "code": "COB_11",
+        "label": "Cobertura 11",
+        "lat": -12.7936559,
+        "lng": -74.9789105
+      },
+      {
+        "code": "COB_12",
+        "label": "Cobertura 12",
+        "lat": -12.7962688,
+        "lng": -74.9846236
+      },
+      {
+        "code": "COB_13",
+        "label": "Cobertura 13",
+        "lat": -12.7921251,
+        "lng": -74.9857884
+      },
+      {
+        "code": "COB_14",
+        "label": "Cobertura 14",
+        "lat": -12.7905811,
+        "lng": -74.9811188
+      },
+      {
+        "code": "COB_15",
+        "label": "Cobertura 15",
+        "lat": -12.7895219,
+        "lng": -74.9840468
+      },
+      {
+        "code": "COB_16",
+        "label": "Cobertura 16",
         "lat": -12.7906386,
         "lng": -74.9907288
+      },
+      {
+        "code": "COB_17",
+        "label": "Cobertura 17",
+        "lat": -12.7926419,
+        "lng": -75.0410112
       }
     ]
   },
