@@ -1,321 +1,1197 @@
 {
   "city": "Huancavelica",
-  "coverage_area_km2": 21,
+  "coverage_area_km2": 14,
   "coverage": {
     "label": "Cobertura de atencion Huancavelica",
-    "source": "Recorrido GPS del dueño 22/10/2026 (chat WhatsApp) + centro de la ciudad, con margen de 300 m",
+    "source": "Recorrido GPS del dueño 22/10/2026 + zona urbana del centro (OpenStreetMap) con 150 m de margen",
     "points": [
       {
-        "code": "COB_01",
+        "code": "COB_001",
         "label": "Cobertura 1",
-        "lat": -12.772029,
-        "lng": -75.026851
+        "lat": -12.770641,
+        "lng": -75.023231
       },
       {
-        "code": "COB_02",
+        "code": "COB_002",
         "label": "Cobertura 2",
-        "lat": -12.771133,
-        "lng": -75.025676
+        "lat": -12.769724,
+        "lng": -75.012005
       },
       {
-        "code": "COB_03",
+        "code": "COB_003",
         "label": "Cobertura 3",
-        "lat": -12.770634,
-        "lng": -75.023199
+        "lat": -12.770962,
+        "lng": -75.011979
       },
       {
-        "code": "COB_04",
+        "code": "COB_004",
         "label": "Cobertura 4",
-        "lat": -12.769423,
-        "lng": -75.008396
+        "lat": -12.771653,
+        "lng": -75.011509
       },
       {
-        "code": "COB_05",
+        "code": "COB_005",
         "label": "Cobertura 5",
-        "lat": -12.777413,
-        "lng": -74.984578
+        "lat": -12.771815,
+        "lng": -75.010679
       },
       {
-        "code": "COB_06",
+        "code": "COB_006",
         "label": "Cobertura 6",
-        "lat": -12.77751,
-        "lng": -74.983908
+        "lat": -12.770867,
+        "lng": -75.009402
       },
       {
-        "code": "COB_07",
+        "code": "COB_007",
         "label": "Cobertura 7",
-        "lat": -12.776522,
-        "lng": -74.958869
+        "lat": -12.770826,
+        "lng": -75.008348
       },
       {
-        "code": "COB_08",
+        "code": "COB_008",
         "label": "Cobertura 8",
-        "lat": -12.769896,
-        "lng": -74.931222
+        "lat": -12.771543,
+        "lng": -75.007559
       },
       {
-        "code": "COB_09",
+        "code": "COB_009",
         "label": "Cobertura 9",
-        "lat": -12.770064,
-        "lng": -74.930074
+        "lat": -12.77313,
+        "lng": -75.007088
       },
       {
-        "code": "COB_10",
+        "code": "COB_010",
         "label": "Cobertura 10",
-        "lat": -12.770681,
-        "lng": -74.929098
+        "lat": -12.773738,
+        "lng": -75.006027
       },
       {
-        "code": "COB_11",
+        "code": "COB_011",
         "label": "Cobertura 11",
-        "lat": -12.772124,
-        "lng": -74.928165
+        "lat": -12.773865,
+        "lng": -75.005233
       },
       {
-        "code": "COB_12",
+        "code": "COB_012",
         "label": "Cobertura 12",
-        "lat": -12.773176,
-        "lng": -74.927977
+        "lat": -12.773478,
+        "lng": -75.004266
       },
       {
-        "code": "COB_13",
+        "code": "COB_013",
         "label": "Cobertura 13",
-        "lat": -12.774342,
-        "lng": -74.928269
+        "lat": -12.773283,
+        "lng": -75.002507
       },
       {
-        "code": "COB_14",
+        "code": "COB_014",
         "label": "Cobertura 14",
-        "lat": -12.799383,
-        "lng": -74.94074
+        "lat": -12.773461,
+        "lng": -75.001615
       },
       {
-        "code": "COB_15",
+        "code": "COB_015",
         "label": "Cobertura 15",
-        "lat": -12.799967,
-        "lng": -74.941128
+        "lat": -12.774238,
+        "lng": -75.000975
       },
       {
-        "code": "COB_16",
+        "code": "COB_016",
         "label": "Cobertura 16",
-        "lat": -12.800566,
-        "lng": -74.941849
+        "lat": -12.775877,
+        "lng": -75.000886
       },
       {
-        "code": "COB_17",
+        "code": "COB_017",
         "label": "Cobertura 17",
-        "lat": -12.800935,
-        "lng": -74.943109
+        "lat": -12.776508,
+        "lng": -75.000257
       },
       {
-        "code": "COB_18",
+        "code": "COB_018",
         "label": "Cobertura 18",
-        "lat": -12.800761,
-        "lng": -74.944225
+        "lat": -12.776648,
+        "lng": -74.999487
       },
       {
-        "code": "COB_19",
+        "code": "COB_019",
         "label": "Cobertura 19",
-        "lat": -12.800259,
-        "lng": -74.945075
+        "lat": -12.776113,
+        "lng": -74.998413
       },
       {
-        "code": "COB_20",
+        "code": "COB_020",
         "label": "Cobertura 20",
-        "lat": -12.791333,
-        "lng": -74.954975
+        "lat": -12.776046,
+        "lng": -74.997721
       },
       {
-        "code": "COB_21",
+        "code": "COB_021",
         "label": "Cobertura 21",
-        "lat": -12.790872,
-        "lng": -74.955981
+        "lat": -12.776772,
+        "lng": -74.996448
       },
       {
-        "code": "COB_22",
+        "code": "COB_022",
         "label": "Cobertura 22",
-        "lat": -12.791062,
-        "lng": -74.957075
+        "lat": -12.777125,
+        "lng": -74.994475
       },
       {
-        "code": "COB_23",
+        "code": "COB_023",
         "label": "Cobertura 23",
-        "lat": -12.794277,
-        "lng": -74.963539
+        "lat": -12.776886,
+        "lng": -74.99392
       },
       {
-        "code": "COB_24",
+        "code": "COB_024",
         "label": "Cobertura 24",
-        "lat": -12.794751,
-        "lng": -74.971094
+        "lat": -12.776062,
+        "lng": -74.993015
       },
       {
-        "code": "COB_25",
+        "code": "COB_025",
         "label": "Cobertura 25",
-        "lat": -12.796039,
-        "lng": -74.977886
+        "lat": -12.775962,
+        "lng": -74.991775
       },
       {
-        "code": "COB_26",
+        "code": "COB_026",
         "label": "Cobertura 26",
-        "lat": -12.798619,
-        "lng": -74.983755
+        "lat": -12.776257,
+        "lng": -74.990966
       },
       {
-        "code": "COB_27",
+        "code": "COB_027",
         "label": "Cobertura 27",
-        "lat": -12.79872,
-        "lng": -74.984455
+        "lat": -12.777235,
+        "lng": -74.990133
       },
       {
-        "code": "COB_28",
+        "code": "COB_028",
         "label": "Cobertura 28",
-        "lat": -12.798596,
-        "lng": -74.985329
+        "lat": -12.777505,
+        "lng": -74.989565
       },
       {
-        "code": "COB_29",
+        "code": "COB_029",
         "label": "Cobertura 29",
-        "lat": -12.798101,
-        "lng": -74.986259
-      },
-      {
-        "code": "COB_30",
-        "label": "Cobertura 30",
-        "lat": -12.797299,
-        "lng": -74.98693
-      },
-      {
-        "code": "COB_31",
-        "label": "Cobertura 31",
-        "lat": -12.792882,
+        "lat": -12.777473,
         "lng": -74.988293
       },
       {
-        "code": "COB_32",
+        "code": "COB_030",
+        "label": "Cobertura 30",
+        "lat": -12.778032,
+        "lng": -74.985466
+      },
+      {
+        "code": "COB_031",
+        "label": "Cobertura 31",
+        "lat": -12.777663,
+        "lng": -74.984353
+      },
+      {
+        "code": "COB_032",
         "label": "Cobertura 32",
-        "lat": -12.792096,
-        "lng": -74.989108
+        "lat": -12.777675,
+        "lng": -74.98327
       },
       {
-        "code": "COB_33",
+        "code": "COB_033",
         "label": "Cobertura 33",
-        "lat": -12.791908,
-        "lng": -74.989852
+        "lat": -12.778864,
+        "lng": -74.980936
       },
       {
-        "code": "COB_34",
+        "code": "COB_034",
         "label": "Cobertura 34",
-        "lat": -12.792359,
-        "lng": -74.999842
+        "lat": -12.780811,
+        "lng": -74.9783
       },
       {
-        "code": "COB_35",
+        "code": "COB_035",
         "label": "Cobertura 35",
-        "lat": -12.792147,
-        "lng": -75.001062
+        "lat": -12.78132,
+        "lng": -74.976784
       },
       {
-        "code": "COB_36",
+        "code": "COB_036",
         "label": "Cobertura 36",
-        "lat": -12.791261,
-        "lng": -75.002214
+        "lat": -12.781285,
+        "lng": -74.976143
       },
       {
-        "code": "COB_37",
+        "code": "COB_037",
         "label": "Cobertura 37",
-        "lat": -12.79028,
-        "lng": -75.00268
+        "lat": -12.781038,
+        "lng": -74.975628
       },
       {
-        "code": "COB_38",
+        "code": "COB_038",
         "label": "Cobertura 38",
-        "lat": -12.785256,
-        "lng": -75.002804
+        "lat": -12.780193,
+        "lng": -74.974592
       },
       {
-        "code": "COB_39",
+        "code": "COB_039",
         "label": "Cobertura 39",
-        "lat": -12.784282,
-        "lng": -75.003384
+        "lat": -12.778792,
+        "lng": -74.973647
       },
       {
-        "code": "COB_40",
+        "code": "COB_040",
         "label": "Cobertura 40",
-        "lat": -12.777698,
-        "lng": -75.01524
+        "lat": -12.777711,
+        "lng": -74.971312
       },
       {
-        "code": "COB_41",
+        "code": "COB_041",
         "label": "Cobertura 41",
-        "lat": -12.776569,
-        "lng": -75.021248
+        "lat": -12.777469,
+        "lng": -74.970407
       },
       {
-        "code": "COB_42",
+        "code": "COB_042",
         "label": "Cobertura 42",
-        "lat": -12.776746,
-        "lng": -75.022006
+        "lat": -12.777542,
+        "lng": -74.969491
       },
       {
-        "code": "COB_43",
+        "code": "COB_043",
         "label": "Cobertura 43",
-        "lat": -12.777215,
-        "lng": -75.022621
+        "lat": -12.777301,
+        "lng": -74.96817
       },
       {
-        "code": "COB_44",
+        "code": "COB_044",
         "label": "Cobertura 44",
-        "lat": -12.793219,
-        "lng": -75.036342
+        "lat": -12.777196,
+        "lng": -74.96454
       },
       {
-        "code": "COB_45",
+        "code": "COB_045",
         "label": "Cobertura 45",
-        "lat": -12.793601,
-        "lng": -75.036933
+        "lat": -12.77658,
+        "lng": -74.963934
       },
       {
-        "code": "COB_46",
+        "code": "COB_046",
         "label": "Cobertura 46",
-        "lat": -12.793852,
-        "lng": -75.03778
+        "lat": -12.775577,
+        "lng": -74.963777
       },
       {
-        "code": "COB_47",
+        "code": "COB_047",
         "label": "Cobertura 47",
-        "lat": -12.793789,
-        "lng": -75.038836
+        "lat": -12.774725,
+        "lng": -74.963245
       },
       {
-        "code": "COB_48",
+        "code": "COB_048",
         "label": "Cobertura 48",
-        "lat": -12.793529,
-        "lng": -75.039493
+        "lat": -12.773499,
+        "lng": -74.962882
       },
       {
-        "code": "COB_49",
+        "code": "COB_049",
         "label": "Cobertura 49",
-        "lat": -12.792856,
-        "lng": -75.040299
+        "lat": -12.773014,
+        "lng": -74.962185
       },
       {
-        "code": "COB_50",
+        "code": "COB_050",
         "label": "Cobertura 50",
-        "lat": -12.791934,
-        "lng": -75.040788
+        "lat": -12.77299,
+        "lng": -74.961288
       },
       {
-        "code": "COB_51",
+        "code": "COB_051",
         "label": "Cobertura 51",
-        "lat": -12.790899,
-        "lng": -75.040886
+        "lat": -12.77334,
+        "lng": -74.960508
       },
       {
-        "code": "COB_52",
+        "code": "COB_052",
         "label": "Cobertura 52",
-        "lat": -12.789904,
-        "lng": -75.040579
+        "lat": -12.773846,
+        "lng": -74.960041
+      },
+      {
+        "code": "COB_053",
+        "label": "Cobertura 53",
+        "lat": -12.775427,
+        "lng": -74.959891
+      },
+      {
+        "code": "COB_054",
+        "label": "Cobertura 54",
+        "lat": -12.775963,
+        "lng": -74.959583
+      },
+      {
+        "code": "COB_055",
+        "label": "Cobertura 55",
+        "lat": -12.776248,
+        "lng": -74.959027
+      },
+      {
+        "code": "COB_056",
+        "label": "Cobertura 56",
+        "lat": -12.776181,
+        "lng": -74.957462
+      },
+      {
+        "code": "COB_057",
+        "label": "Cobertura 57",
+        "lat": -12.776679,
+        "lng": -74.956722
+      },
+      {
+        "code": "COB_058",
+        "label": "Cobertura 58",
+        "lat": -12.777394,
+        "lng": -74.956453
+      },
+      {
+        "code": "COB_059",
+        "label": "Cobertura 59",
+        "lat": -12.779385,
+        "lng": -74.956411
+      },
+      {
+        "code": "COB_060",
+        "label": "Cobertura 60",
+        "lat": -12.780254,
+        "lng": -74.955701
+      },
+      {
+        "code": "COB_061",
+        "label": "Cobertura 61",
+        "lat": -12.780454,
+        "lng": -74.95532
+      },
+      {
+        "code": "COB_062",
+        "label": "Cobertura 62",
+        "lat": -12.780454,
+        "lng": -74.954679
+      },
+      {
+        "code": "COB_063",
+        "label": "Cobertura 63",
+        "lat": -12.780254,
+        "lng": -74.954298
+      },
+      {
+        "code": "COB_064",
+        "label": "Cobertura 64",
+        "lat": -12.779429,
+        "lng": -74.9536
+      },
+      {
+        "code": "COB_065",
+        "label": "Cobertura 65",
+        "lat": -12.779188,
+        "lng": -74.953006
+      },
+      {
+        "code": "COB_066",
+        "label": "Cobertura 66",
+        "lat": -12.779255,
+        "lng": -74.952313
+      },
+      {
+        "code": "COB_067",
+        "label": "Cobertura 67",
+        "lat": -12.779605,
+        "lng": -74.951779
+      },
+      {
+        "code": "COB_068",
+        "label": "Cobertura 68",
+        "lat": -12.780911,
+        "lng": -74.951122
+      },
+      {
+        "code": "COB_069",
+        "label": "Cobertura 69",
+        "lat": -12.78159,
+        "lng": -74.951873
+      },
+      {
+        "code": "COB_070",
+        "label": "Cobertura 70",
+        "lat": -12.782236,
+        "lng": -74.95199
+      },
+      {
+        "code": "COB_071",
+        "label": "Cobertura 71",
+        "lat": -12.784193,
+        "lng": -74.951472
+      },
+      {
+        "code": "COB_072",
+        "label": "Cobertura 72",
+        "lat": -12.784593,
+        "lng": -74.951017
+      },
+      {
+        "code": "COB_073",
+        "label": "Cobertura 73",
+        "lat": -12.784699,
+        "lng": -74.950622
+      },
+      {
+        "code": "COB_074",
+        "label": "Cobertura 74",
+        "lat": -12.78453,
+        "lng": -74.949761
+      },
+      {
+        "code": "COB_075",
+        "label": "Cobertura 75",
+        "lat": -12.783943,
+        "lng": -74.949162
+      },
+      {
+        "code": "COB_076",
+        "label": "Cobertura 76",
+        "lat": -12.783316,
+        "lng": -74.9491
+      },
+      {
+        "code": "COB_077",
+        "label": "Cobertura 77",
+        "lat": -12.781172,
+        "lng": -74.949978
+      },
+      {
+        "code": "COB_078",
+        "label": "Cobertura 78",
+        "lat": -12.780291,
+        "lng": -74.948787
+      },
+      {
+        "code": "COB_079",
+        "label": "Cobertura 79",
+        "lat": -12.780224,
+        "lng": -74.948094
+      },
+      {
+        "code": "COB_080",
+        "label": "Cobertura 80",
+        "lat": -12.780689,
+        "lng": -74.947105
+      },
+      {
+        "code": "COB_081",
+        "label": "Cobertura 81",
+        "lat": -12.780712,
+        "lng": -74.946498
+      },
+      {
+        "code": "COB_082",
+        "label": "Cobertura 82",
+        "lat": -12.779877,
+        "lng": -74.94543
+      },
+      {
+        "code": "COB_083",
+        "label": "Cobertura 83",
+        "lat": -12.779679,
+        "lng": -74.944656
+      },
+      {
+        "code": "COB_084",
+        "label": "Cobertura 84",
+        "lat": -12.779802,
+        "lng": -74.944133
+      },
+      {
+        "code": "COB_085",
+        "label": "Cobertura 85",
+        "lat": -12.780376,
+        "lng": -74.943311
+      },
+      {
+        "code": "COB_086",
+        "label": "Cobertura 86",
+        "lat": -12.780582,
+        "lng": -74.942332
+      },
+      {
+        "code": "COB_087",
+        "label": "Cobertura 87",
+        "lat": -12.781199,
+        "lng": -74.941321
+      },
+      {
+        "code": "COB_088",
+        "label": "Cobertura 88",
+        "lat": -12.781199,
+        "lng": -74.94089
+      },
+      {
+        "code": "COB_089",
+        "label": "Cobertura 89",
+        "lat": -12.780902,
+        "lng": -74.940324
+      },
+      {
+        "code": "COB_090",
+        "label": "Cobertura 90",
+        "lat": -12.780134,
+        "lng": -74.94
+      },
+      {
+        "code": "COB_091",
+        "label": "Cobertura 91",
+        "lat": -12.772003,
+        "lng": -74.939995
+      },
+      {
+        "code": "COB_092",
+        "label": "Cobertura 92",
+        "lat": -12.769904,
+        "lng": -74.931169
+      },
+      {
+        "code": "COB_093",
+        "label": "Cobertura 93",
+        "lat": -12.77007,
+        "lng": -74.930076
+      },
+      {
+        "code": "COB_094",
+        "label": "Cobertura 94",
+        "lat": -12.770686,
+        "lng": -74.929103
+      },
+      {
+        "code": "COB_095",
+        "label": "Cobertura 95",
+        "lat": -12.772126,
+        "lng": -74.92817
+      },
+      {
+        "code": "COB_096",
+        "label": "Cobertura 96",
+        "lat": -12.773176,
+        "lng": -74.927983
+      },
+      {
+        "code": "COB_097",
+        "label": "Cobertura 97",
+        "lat": -12.774394,
+        "lng": -74.928295
+      },
+      {
+        "code": "COB_098",
+        "label": "Cobertura 98",
+        "lat": -12.79785,
+        "lng": -74.939977
+      },
+      {
+        "code": "COB_099",
+        "label": "Cobertura 99",
+        "lat": -12.797574,
+        "lng": -74.940641
+      },
+      {
+        "code": "COB_100",
+        "label": "Cobertura 100",
+        "lat": -12.797661,
+        "lng": -74.941255
+      },
+      {
+        "code": "COB_101",
+        "label": "Cobertura 101",
+        "lat": -12.798058,
+        "lng": -74.941725
+      },
+      {
+        "code": "COB_102",
+        "label": "Cobertura 102",
+        "lat": -12.799151,
+        "lng": -74.942232
+      },
+      {
+        "code": "COB_103",
+        "label": "Cobertura 103",
+        "lat": -12.799569,
+        "lng": -74.943028
+      },
+      {
+        "code": "COB_104",
+        "label": "Cobertura 104",
+        "lat": -12.799548,
+        "lng": -74.943565
+      },
+      {
+        "code": "COB_105",
+        "label": "Cobertura 105",
+        "lat": -12.799133,
+        "lng": -74.944508
+      },
+      {
+        "code": "COB_106",
+        "label": "Cobertura 106",
+        "lat": -12.79844,
+        "lng": -74.945274
+      },
+      {
+        "code": "COB_107",
+        "label": "Cobertura 107",
+        "lat": -12.797636,
+        "lng": -74.945584
+      },
+      {
+        "code": "COB_108",
+        "label": "Cobertura 108",
+        "lat": -12.796719,
+        "lng": -74.94624
+      },
+      {
+        "code": "COB_109",
+        "label": "Cobertura 109",
+        "lat": -12.795524,
+        "lng": -74.946405
+      },
+      {
+        "code": "COB_110",
+        "label": "Cobertura 110",
+        "lat": -12.794376,
+        "lng": -74.94727
+      },
+      {
+        "code": "COB_111",
+        "label": "Cobertura 111",
+        "lat": -12.7925,
+        "lng": -74.947306
+      },
+      {
+        "code": "COB_112",
+        "label": "Cobertura 112",
+        "lat": -12.791126,
+        "lng": -74.948494
+      },
+      {
+        "code": "COB_113",
+        "label": "Cobertura 113",
+        "lat": -12.790605,
+        "lng": -74.948578
+      },
+      {
+        "code": "COB_114",
+        "label": "Cobertura 114",
+        "lat": -12.789952,
+        "lng": -74.948376
+      },
+      {
+        "code": "COB_115",
+        "label": "Cobertura 115",
+        "lat": -12.788928,
+        "lng": -74.947083
+      },
+      {
+        "code": "COB_116",
+        "label": "Cobertura 116",
+        "lat": -12.788572,
+        "lng": -74.946862
+      },
+      {
+        "code": "COB_117",
+        "label": "Cobertura 117",
+        "lat": -12.787955,
+        "lng": -74.946821
+      },
+      {
+        "code": "COB_118",
+        "label": "Cobertura 118",
+        "lat": -12.787574,
+        "lng": -74.946993
+      },
+      {
+        "code": "COB_119",
+        "label": "Cobertura 119",
+        "lat": -12.78713,
+        "lng": -74.947691
+      },
+      {
+        "code": "COB_120",
+        "label": "Cobertura 120",
+        "lat": -12.787278,
+        "lng": -74.949693
+      },
+      {
+        "code": "COB_121",
+        "label": "Cobertura 121",
+        "lat": -12.787155,
+        "lng": -74.950323
+      },
+      {
+        "code": "COB_122",
+        "label": "Cobertura 122",
+        "lat": -12.786722,
+        "lng": -74.950861
+      },
+      {
+        "code": "COB_123",
+        "label": "Cobertura 123",
+        "lat": -12.785891,
+        "lng": -74.951279
+      },
+      {
+        "code": "COB_124",
+        "label": "Cobertura 124",
+        "lat": -12.785541,
+        "lng": -74.951795
+      },
+      {
+        "code": "COB_125",
+        "label": "Cobertura 125",
+        "lat": -12.78549,
+        "lng": -74.952214
+      },
+      {
+        "code": "COB_126",
+        "label": "Cobertura 126",
+        "lat": -12.785705,
+        "lng": -74.952803
+      },
+      {
+        "code": "COB_127",
+        "label": "Cobertura 127",
+        "lat": -12.786845,
+        "lng": -74.953801
+      },
+      {
+        "code": "COB_128",
+        "label": "Cobertura 128",
+        "lat": -12.787181,
+        "lng": -74.95447
+      },
+      {
+        "code": "COB_129",
+        "label": "Cobertura 129",
+        "lat": -12.78701,
+        "lng": -74.956398
+      },
+      {
+        "code": "COB_130",
+        "label": "Cobertura 130",
+        "lat": -12.787499,
+        "lng": -74.957652
+      },
+      {
+        "code": "COB_131",
+        "label": "Cobertura 131",
+        "lat": -12.787545,
+        "lng": -74.958557
+      },
+      {
+        "code": "COB_132",
+        "label": "Cobertura 132",
+        "lat": -12.787307,
+        "lng": -74.95997
+      },
+      {
+        "code": "COB_133",
+        "label": "Cobertura 133",
+        "lat": -12.786836,
+        "lng": -74.960962
+      },
+      {
+        "code": "COB_134",
+        "label": "Cobertura 134",
+        "lat": -12.786931,
+        "lng": -74.961583
+      },
+      {
+        "code": "COB_135",
+        "label": "Cobertura 135",
+        "lat": -12.787335,
+        "lng": -74.962112
+      },
+      {
+        "code": "COB_136",
+        "label": "Cobertura 136",
+        "lat": -12.788218,
+        "lng": -74.962482
+      },
+      {
+        "code": "COB_137",
+        "label": "Cobertura 137",
+        "lat": -12.788828,
+        "lng": -74.963083
+      },
+      {
+        "code": "COB_138",
+        "label": "Cobertura 138",
+        "lat": -12.789173,
+        "lng": -74.963832
+      },
+      {
+        "code": "COB_139",
+        "label": "Cobertura 139",
+        "lat": -12.789353,
+        "lng": -74.965408
+      },
+      {
+        "code": "COB_140",
+        "label": "Cobertura 140",
+        "lat": -12.790742,
+        "lng": -74.966386
+      },
+      {
+        "code": "COB_141",
+        "label": "Cobertura 141",
+        "lat": -12.791851,
+        "lng": -74.968467
+      },
+      {
+        "code": "COB_142",
+        "label": "Cobertura 142",
+        "lat": -12.79187,
+        "lng": -74.96959
+      },
+      {
+        "code": "COB_143",
+        "label": "Cobertura 143",
+        "lat": -12.791345,
+        "lng": -74.970946
+      },
+      {
+        "code": "COB_144",
+        "label": "Cobertura 144",
+        "lat": -12.79173,
+        "lng": -74.973059
+      },
+      {
+        "code": "COB_145",
+        "label": "Cobertura 145",
+        "lat": -12.791655,
+        "lng": -74.974222
+      },
+      {
+        "code": "COB_146",
+        "label": "Cobertura 146",
+        "lat": -12.791897,
+        "lng": -74.975468
+      },
+      {
+        "code": "COB_147",
+        "label": "Cobertura 147",
+        "lat": -12.791918,
+        "lng": -74.977288
+      },
+      {
+        "code": "COB_148",
+        "label": "Cobertura 148",
+        "lat": -12.792642,
+        "lng": -74.978448
+      },
+      {
+        "code": "COB_149",
+        "label": "Cobertura 149",
+        "lat": -12.792708,
+        "lng": -74.979542
+      },
+      {
+        "code": "COB_150",
+        "label": "Cobertura 150",
+        "lat": -12.792225,
+        "lng": -74.980711
+      },
+      {
+        "code": "COB_151",
+        "label": "Cobertura 151",
+        "lat": -12.791269,
+        "lng": -74.981292
+      },
+      {
+        "code": "COB_152",
+        "label": "Cobertura 152",
+        "lat": -12.790736,
+        "lng": -74.98198
+      },
+      {
+        "code": "COB_153",
+        "label": "Cobertura 153",
+        "lat": -12.789029,
+        "lng": -74.984959
+      },
+      {
+        "code": "COB_154",
+        "label": "Cobertura 154",
+        "lat": -12.788739,
+        "lng": -74.98596
+      },
+      {
+        "code": "COB_155",
+        "label": "Cobertura 155",
+        "lat": -12.788581,
+        "lng": -74.987622
+      },
+      {
+        "code": "COB_156",
+        "label": "Cobertura 156",
+        "lat": -12.789545,
+        "lng": -74.989347
+      },
+      {
+        "code": "COB_157",
+        "label": "Cobertura 157",
+        "lat": -12.790515,
+        "lng": -74.990297
+      },
+      {
+        "code": "COB_158",
+        "label": "Cobertura 158",
+        "lat": -12.790638,
+        "lng": -74.990927
+      },
+      {
+        "code": "COB_159",
+        "label": "Cobertura 159",
+        "lat": -12.79044,
+        "lng": -74.991593
+      },
+      {
+        "code": "COB_160",
+        "label": "Cobertura 160",
+        "lat": -12.789853,
+        "lng": -74.992124
+      },
+      {
+        "code": "COB_161",
+        "label": "Cobertura 161",
+        "lat": -12.788846,
+        "lng": -74.992327
+      },
+      {
+        "code": "COB_162",
+        "label": "Cobertura 162",
+        "lat": -12.788368,
+        "lng": -74.992704
+      },
+      {
+        "code": "COB_163",
+        "label": "Cobertura 163",
+        "lat": -12.787656,
+        "lng": -74.994288
+      },
+      {
+        "code": "COB_164",
+        "label": "Cobertura 164",
+        "lat": -12.786662,
+        "lng": -74.995172
+      },
+      {
+        "code": "COB_165",
+        "label": "Cobertura 165",
+        "lat": -12.786288,
+        "lng": -74.995746
+      },
+      {
+        "code": "COB_166",
+        "label": "Cobertura 166",
+        "lat": -12.786153,
+        "lng": -74.996992
+      },
+      {
+        "code": "COB_167",
+        "label": "Cobertura 167",
+        "lat": -12.785932,
+        "lng": -74.99748
+      },
+      {
+        "code": "COB_168",
+        "label": "Cobertura 168",
+        "lat": -12.784578,
+        "lng": -74.998463
+      },
+      {
+        "code": "COB_169",
+        "label": "Cobertura 169",
+        "lat": -12.783556,
+        "lng": -74.998628
+      },
+      {
+        "code": "COB_170",
+        "label": "Cobertura 170",
+        "lat": -12.782262,
+        "lng": -74.998228
+      },
+      {
+        "code": "COB_171",
+        "label": "Cobertura 171",
+        "lat": -12.78145,
+        "lng": -74.997552
+      },
+      {
+        "code": "COB_172",
+        "label": "Cobertura 172",
+        "lat": -12.780871,
+        "lng": -74.997411
+      },
+      {
+        "code": "COB_173",
+        "label": "Cobertura 173",
+        "lat": -12.780305,
+        "lng": -74.997603
+      },
+      {
+        "code": "COB_174",
+        "label": "Cobertura 174",
+        "lat": -12.779373,
+        "lng": -74.998403
+      },
+      {
+        "code": "COB_175",
+        "label": "Cobertura 175",
+        "lat": -12.77911,
+        "lng": -74.999152
+      },
+      {
+        "code": "COB_176",
+        "label": "Cobertura 176",
+        "lat": -12.779297,
+        "lng": -75.00049
+      },
+      {
+        "code": "COB_177",
+        "label": "Cobertura 177",
+        "lat": -12.778857,
+        "lng": -75.001523
+      },
+      {
+        "code": "COB_178",
+        "label": "Cobertura 178",
+        "lat": -12.778631,
+        "lng": -75.003292
+      },
+      {
+        "code": "COB_179",
+        "label": "Cobertura 179",
+        "lat": -12.776905,
+        "lng": -75.009042
+      },
+      {
+        "code": "COB_180",
+        "label": "Cobertura 180",
+        "lat": -12.77702,
+        "lng": -75.01111
+      },
+      {
+        "code": "COB_181",
+        "label": "Cobertura 181",
+        "lat": -12.777317,
+        "lng": -75.011676
+      },
+      {
+        "code": "COB_182",
+        "label": "Cobertura 182",
+        "lat": -12.777873,
+        "lng": -75.011979
+      },
+      {
+        "code": "COB_183",
+        "label": "Cobertura 183",
+        "lat": -12.77949,
+        "lng": -75.012004
+      },
+      {
+        "code": "COB_184",
+        "label": "Cobertura 184",
+        "lat": -12.777712,
+        "lng": -75.015245
+      },
+      {
+        "code": "COB_185",
+        "label": "Cobertura 185",
+        "lat": -12.776613,
+        "lng": -75.021015
+      },
+      {
+        "code": "COB_186",
+        "label": "Cobertura 186",
+        "lat": -12.776769,
+        "lng": -75.021995
+      },
+      {
+        "code": "COB_187",
+        "label": "Cobertura 187",
+        "lat": -12.777303,
+        "lng": -75.022696
+      },
+      {
+        "code": "COB_188",
+        "label": "Cobertura 188",
+        "lat": -12.793159,
+        "lng": -75.03629
+      },
+      {
+        "code": "COB_189",
+        "label": "Cobertura 189",
+        "lat": -12.793558,
+        "lng": -75.036866
+      },
+      {
+        "code": "COB_190",
+        "label": "Cobertura 190",
+        "lat": -12.793848,
+        "lng": -75.037781
+      },
+      {
+        "code": "COB_191",
+        "label": "Cobertura 191",
+        "lat": -12.793786,
+        "lng": -75.038835
+      },
+      {
+        "code": "COB_192",
+        "label": "Cobertura 192",
+        "lat": -12.793526,
+        "lng": -75.039491
+      },
+      {
+        "code": "COB_193",
+        "label": "Cobertura 193",
+        "lat": -12.792853,
+        "lng": -75.040295
+      },
+      {
+        "code": "COB_194",
+        "label": "Cobertura 194",
+        "lat": -12.791933,
+        "lng": -75.040783
+      },
+      {
+        "code": "COB_195",
+        "label": "Cobertura 195",
+        "lat": -12.7909,
+        "lng": -75.040881
+      },
+      {
+        "code": "COB_196",
+        "label": "Cobertura 196",
+        "lat": -12.789866,
+        "lng": -75.04055
+      },
+      {
+        "code": "COB_197",
+        "label": "Cobertura 197",
+        "lat": -12.772086,
+        "lng": -75.026895
+      },
+      {
+        "code": "COB_198",
+        "label": "Cobertura 198",
+        "lat": -12.771139,
+        "lng": -75.025673
       }
     ]
   },
