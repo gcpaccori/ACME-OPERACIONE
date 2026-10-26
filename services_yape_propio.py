@@ -74,9 +74,11 @@ def estado_reclamo(referencia: str) -> dict[str, Any]:
     return _llamar("GET", "/v1/reclamos", params={"referencia": referencia})
 
 
-def reclamar(referencia: str, codigo: str, monto_centimos: int, ip: str | None) -> dict[str, Any]:
-    """Un solo reclamo por pedido: codigo de seguridad y monto de la constancia."""
+def reclamar(referencia: str, codigo: str | None, monto_centimos: int, ip: str | None,
+             nombre_titular: str | None = None) -> dict[str, Any]:
+    """Un solo reclamo por pedido: monto de la constancia y su codigo, o el nombre del titular."""
     return _llamar("POST", "/v1/reclamos", json={"referencia": referencia, "codigo": codigo,
+                                                  "nombre_titular": nombre_titular,
                                                   "monto_centimos": monto_centimos, "ip": ip})
 
 
