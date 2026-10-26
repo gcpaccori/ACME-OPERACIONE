@@ -187,7 +187,9 @@ class CourierPaymentChargeRequest(BaseModel):
 class YapeReclamoRequest(BaseModel):
     order_id: str
     # Codigo de seguridad de 3 digitos y monto exacto de la constancia de Yape.
-    codigo: str = Field(pattern=r"^\d{3}$")
+    codigo: str | None = Field(default=None, pattern=r"^\d{3}$")
+    # Comprobante sin codigo (pago desde Plin o un banco): nombre del titular.
+    nombre_titular: str | None = Field(default=None, max_length=120)
     monto_centimos: int = Field(gt=0, le=10000000)
 
 

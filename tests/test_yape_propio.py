@@ -305,15 +305,33 @@ def test_reclamo_lo_hace_solo_el_duenio_del_pedido(monkeypatch):
 def test_reclamo_pasa_codigo_y_monto_a_acme_yape(monkeypatch):
     llamadas = []
 
-    def reclamar(referencia, codigo, monto, ip):
-        llamadas.append((referencia, codigo, monto))
+    def reclamar(referencia, codigo, monto, ip, nombre_titular=None):
+        llamadas.append((referencia, codigo, monto, nombre_titular))
         return {"resultado": "aplicado", "mensaje": "Encontramos tu yapeo. Tu pedido ya esta pagado."}
 
     cliente = _reclamo(monkeypatch, reclamar=reclamar)
     res = cliente.post("/api/courier/payments/yape-propio/reclamo", headers={"Authorization": "Bearer t"},
                        json={"order_id": ORDER_ID, "codigo": "123", "monto_centimos": 2000})
     assert res.status_code == 200 and res.json()["resultado"] == "aplicado"
-    assert llamadas == [(ORDER_ID, "123", 2000)]
+    assert llamadas == [(ORDER_ID, "123", 2000, None)]
+
+
+def test_reclamo_sin_codigo_pasa_el_nombre_del_titular(monkeypatch):
+    """Comprobante de Plin o de un banco: no trae codigo, pero si el nombre."""
+    llamadas = []
+
+    def reclamar(referencia, codigo, monto, ip, nombre_titular=None):
+        llamadas.append((referencia, codigo, monto, nombre_titular))
+        return {"resultado": "aplicado", "mensaje": "Encontramos tu yapeo. Tu pedido ya esta pagado."}
+
+    cliente = _reclamo(monkeypatch, reclamar=reclamar)
+    res = cliente.post("/api/courier/payments/yape-propio/reclamo", headers={"Authorization": "Bearer t"},
+                       json={"order_id": ORDER_ID, "nombre_titular": "Rosa Diaz", "monto_centimos": 2000})
+    assert res.status_code == 200 and llamadas == [(ORDER_ID, None, 2000, "Rosa Diaz")]
+    # Sin codigo ni nombre no hay nada que buscar.
+    vacio = cliente.post("/api/courier/payments/yape-propio/reclamo", headers={"Authorization": "Bearer t"},
+                         json={"order_id": ORDER_ID, "monto_centimos": 2000})
+    assert vacio.status_code == 422 and len(llamadas) == 1
 
 
 def test_reclamo_valida_el_codigo_y_no_consulta_si_ya_esta_pagado(monkeypatch):

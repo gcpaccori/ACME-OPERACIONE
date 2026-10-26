@@ -991,8 +991,11 @@ def reclamar_yape(payload: YapeReclamoRequest, request: Request, authorization: 
                 "puede_reclamar": False, "reclamo": None, "incidente_en": None}
     ip = (request.headers.get("x-forwarded-for") or "").split(",")[0].strip() or (
         request.client.host if request.client else None)
+    if not payload.codigo and not payload.nombre_titular:
+        raise HTTPException(status_code=422, detail="Indica el codigo de seguridad o el nombre del titular.")
     try:
-        resultado = services_yape_propio.reclamar(str(order["id"]), payload.codigo, payload.monto_centimos, ip)
+        resultado = services_yape_propio.reclamar(str(order["id"]), payload.codigo, payload.monto_centimos, ip,
+                                                  nombre_titular=payload.nombre_titular)
     except YapePropioError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.mensaje) from exc
     logger.info("yape_reclamo order_id=%s resultado=%s", order["id"], resultado.get("resultado"))
