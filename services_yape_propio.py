@@ -94,3 +94,21 @@ def firma_valida(timestamp: str | None, firma: str | None, cuerpo: bytes, ahora:
         return False
     esperado = hmac.new(secreto.encode(), timestamp.encode() + b"." + cuerpo, hashlib.sha256).hexdigest()
     return hmac.compare_digest(esperado, firma.lower())
+
+
+def conciliacion(desde: str, hasta: str) -> dict[str, Any]:
+    """Yapeos, cobros y casos abiertos de un periodo, para el panel de admin."""
+    try:
+        resp = requests.get(f"{settings.yape_propio_url.rstrip('/')}/v1/admin/conciliacion",
+                            headers={"X-Api-Key": settings.yape_propio_api_key},
+                            params={"desde": desde, "hasta": hasta}, timeout=20)
+    except requests.RequestException as exc:
+        raise YapePropioError(502, "No se pudo conectar con el servidor de Yape.") from exc
+    if resp.status_code < 300:
+        return resp.json()
+    try:
+        detalle = resp.json().get("detail")
+    except ValueError:
+        detalle = None
+    raise YapePropioError(422 if resp.status_code == 422 else 502,
+                          str(detalle) if isinstance(detalle, str) else "El servidor de Yape no respondio bien.")

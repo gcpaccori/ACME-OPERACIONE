@@ -6,6 +6,7 @@ import routes_courier_quote
 import routes_courier_orders
 import routes_webhooks
 import routes_admin_refunds
+import routes_admin_yape
 import routes_guest_checkout
 import logging
 
@@ -46,6 +47,7 @@ app.include_router(routes_courier_quote.router)
 app.include_router(routes_courier_orders.router)
 app.include_router(routes_webhooks.router)
 app.include_router(routes_admin_refunds.router)
+app.include_router(routes_admin_yape.router)
 app.include_router(routes_guest_checkout.router)
 
 # Health check
