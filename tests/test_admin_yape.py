@@ -106,3 +106,22 @@ def test_sin_sesion_o_sin_rol_no_ve_nada(entorno):
     r = cliente.get("/api/admin/yape/conciliacion", params=PERIODO, headers={"Authorization": "Bearer token-cliente"})
     assert r.status_code == 403
     assert pedidos == []
+
+
+def test_si_supabase_no_responde_igual_se_ven_los_yapes(entorno, monkeypatch):
+    cliente, *_ = entorno
+    import requests
+
+    def caido(table, params):
+        if table in ("orders", "profiles") and "user_id" not in params:
+            raise requests.ConnectionError("timeout")
+        if table == "profiles" and params.get("user_id", "").startswith("in."):
+            raise requests.ConnectionError("timeout")
+        return original(table, params)
+
+    original = routes_admin_yape._sb_get
+    monkeypatch.setattr(routes_admin_yape, "_sb_get", caido)
+    r = cliente.get("/api/admin/yape/conciliacion", params=PERIODO, headers=TOKEN)
+    assert r.status_code == 200
+    datos = r.json()
+    assert datos["yapeos"][0]["id"] == "y1" and datos["pedidos"] == {} and datos["aviso"]

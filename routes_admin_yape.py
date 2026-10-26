@@ -143,7 +143,7 @@ def conciliacion(desde: datetime, hasta: datetime, authorization: str | None = H
         raise HTTPException(status_code=exc.status_code, detail=exc.mensaje) from exc
     try:
         return _enriquecer(datos)
-    except HTTPException:
+    except (HTTPException, requests.RequestException):
         # Sin los datos de ACME el panel igual sirve: los yapeos y cobros son lo importante.
         logger.exception("conciliacion yape: no se pudo leer pedidos de ACME")
         datos["pedidos"], datos["clientes"], datos["aviso"] = {}, {}, "No se pudieron leer los pedidos de ACME."
