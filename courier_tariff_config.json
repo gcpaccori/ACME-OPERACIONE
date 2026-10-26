@@ -3,109 +3,319 @@
   "coverage_area_km2": 21,
   "coverage": {
     "label": "Cobertura de atencion Huancavelica",
-    "source": "Puntos del dueño 22/10/2026 (chat WhatsApp) + franja sur del centro provisional",
+    "source": "Recorrido GPS del dueño 22/10/2026 (chat WhatsApp) + centro de la ciudad, con margen de 300 m",
     "points": [
       {
         "code": "COB_01",
         "label": "Cobertura 1",
-        "lat": -12.7723896,
-        "lng": -75.0253957
+        "lat": -12.772029,
+        "lng": -75.026851
       },
       {
         "code": "COB_02",
         "label": "Cobertura 2",
-        "lat": -12.7707182,
-        "lng": -75.008654
+        "lat": -12.771133,
+        "lng": -75.025676
       },
       {
         "code": "COB_03",
         "label": "Cobertura 3",
-        "lat": -12.778888,
-        "lng": -74.9844568
+        "lat": -12.770634,
+        "lng": -75.023199
       },
       {
         "code": "COB_04",
         "label": "Cobertura 4",
-        "lat": -12.7779165,
-        "lng": -74.958857
+        "lat": -12.769423,
+        "lng": -75.008396
       },
       {
         "code": "COB_05",
         "label": "Cobertura 5",
-        "lat": -12.771038,
-        "lng": -74.9303828
+        "lat": -12.777413,
+        "lng": -74.984578
       },
       {
         "code": "COB_06",
         "label": "Cobertura 6",
-        "lat": -12.7730455,
-        "lng": -74.9291616
+        "lat": -12.77751,
+        "lng": -74.983908
       },
       {
         "code": "COB_07",
         "label": "Cobertura 7",
-        "lat": -12.800462,
-        "lng": -74.9428152
+        "lat": -12.776522,
+        "lng": -74.958869
       },
       {
         "code": "COB_08",
         "label": "Cobertura 8",
-        "lat": -12.7879839,
-        "lng": -74.956645
+        "lat": -12.769896,
+        "lng": -74.931222
       },
       {
         "code": "COB_09",
         "label": "Cobertura 9",
-        "lat": -12.7918243,
-        "lng": -74.9641272
+        "lat": -12.770064,
+        "lng": -74.930074
       },
       {
         "code": "COB_10",
         "label": "Cobertura 10",
-        "lat": -12.7922396,
-        "lng": -74.9715419
+        "lat": -12.770681,
+        "lng": -74.929098
       },
       {
         "code": "COB_11",
         "label": "Cobertura 11",
-        "lat": -12.7936559,
-        "lng": -74.9789105
+        "lat": -12.772124,
+        "lng": -74.928165
       },
       {
         "code": "COB_12",
         "label": "Cobertura 12",
-        "lat": -12.7962688,
-        "lng": -74.9846236
+        "lat": -12.773176,
+        "lng": -74.927977
       },
       {
         "code": "COB_13",
         "label": "Cobertura 13",
-        "lat": -12.7921251,
-        "lng": -74.9857884
+        "lat": -12.774342,
+        "lng": -74.928269
       },
       {
         "code": "COB_14",
         "label": "Cobertura 14",
-        "lat": -12.7905811,
-        "lng": -74.9811188
+        "lat": -12.799383,
+        "lng": -74.94074
       },
       {
         "code": "COB_15",
         "label": "Cobertura 15",
-        "lat": -12.7895219,
-        "lng": -74.9840468
+        "lat": -12.799967,
+        "lng": -74.941128
       },
       {
         "code": "COB_16",
         "label": "Cobertura 16",
-        "lat": -12.7906386,
-        "lng": -74.9907288
+        "lat": -12.800566,
+        "lng": -74.941849
       },
       {
         "code": "COB_17",
         "label": "Cobertura 17",
-        "lat": -12.7926419,
-        "lng": -75.0410112
+        "lat": -12.800935,
+        "lng": -74.943109
+      },
+      {
+        "code": "COB_18",
+        "label": "Cobertura 18",
+        "lat": -12.800761,
+        "lng": -74.944225
+      },
+      {
+        "code": "COB_19",
+        "label": "Cobertura 19",
+        "lat": -12.800259,
+        "lng": -74.945075
+      },
+      {
+        "code": "COB_20",
+        "label": "Cobertura 20",
+        "lat": -12.791333,
+        "lng": -74.954975
+      },
+      {
+        "code": "COB_21",
+        "label": "Cobertura 21",
+        "lat": -12.790872,
+        "lng": -74.955981
+      },
+      {
+        "code": "COB_22",
+        "label": "Cobertura 22",
+        "lat": -12.791062,
+        "lng": -74.957075
+      },
+      {
+        "code": "COB_23",
+        "label": "Cobertura 23",
+        "lat": -12.794277,
+        "lng": -74.963539
+      },
+      {
+        "code": "COB_24",
+        "label": "Cobertura 24",
+        "lat": -12.794751,
+        "lng": -74.971094
+      },
+      {
+        "code": "COB_25",
+        "label": "Cobertura 25",
+        "lat": -12.796039,
+        "lng": -74.977886
+      },
+      {
+        "code": "COB_26",
+        "label": "Cobertura 26",
+        "lat": -12.798619,
+        "lng": -74.983755
+      },
+      {
+        "code": "COB_27",
+        "label": "Cobertura 27",
+        "lat": -12.79872,
+        "lng": -74.984455
+      },
+      {
+        "code": "COB_28",
+        "label": "Cobertura 28",
+        "lat": -12.798596,
+        "lng": -74.985329
+      },
+      {
+        "code": "COB_29",
+        "label": "Cobertura 29",
+        "lat": -12.798101,
+        "lng": -74.986259
+      },
+      {
+        "code": "COB_30",
+        "label": "Cobertura 30",
+        "lat": -12.797299,
+        "lng": -74.98693
+      },
+      {
+        "code": "COB_31",
+        "label": "Cobertura 31",
+        "lat": -12.792882,
+        "lng": -74.988293
+      },
+      {
+        "code": "COB_32",
+        "label": "Cobertura 32",
+        "lat": -12.792096,
+        "lng": -74.989108
+      },
+      {
+        "code": "COB_33",
+        "label": "Cobertura 33",
+        "lat": -12.791908,
+        "lng": -74.989852
+      },
+      {
+        "code": "COB_34",
+        "label": "Cobertura 34",
+        "lat": -12.792359,
+        "lng": -74.999842
+      },
+      {
+        "code": "COB_35",
+        "label": "Cobertura 35",
+        "lat": -12.792147,
+        "lng": -75.001062
+      },
+      {
+        "code": "COB_36",
+        "label": "Cobertura 36",
+        "lat": -12.791261,
+        "lng": -75.002214
+      },
+      {
+        "code": "COB_37",
+        "label": "Cobertura 37",
+        "lat": -12.79028,
+        "lng": -75.00268
+      },
+      {
+        "code": "COB_38",
+        "label": "Cobertura 38",
+        "lat": -12.785256,
+        "lng": -75.002804
+      },
+      {
+        "code": "COB_39",
+        "label": "Cobertura 39",
+        "lat": -12.784282,
+        "lng": -75.003384
+      },
+      {
+        "code": "COB_40",
+        "label": "Cobertura 40",
+        "lat": -12.777698,
+        "lng": -75.01524
+      },
+      {
+        "code": "COB_41",
+        "label": "Cobertura 41",
+        "lat": -12.776569,
+        "lng": -75.021248
+      },
+      {
+        "code": "COB_42",
+        "label": "Cobertura 42",
+        "lat": -12.776746,
+        "lng": -75.022006
+      },
+      {
+        "code": "COB_43",
+        "label": "Cobertura 43",
+        "lat": -12.777215,
+        "lng": -75.022621
+      },
+      {
+        "code": "COB_44",
+        "label": "Cobertura 44",
+        "lat": -12.793219,
+        "lng": -75.036342
+      },
+      {
+        "code": "COB_45",
+        "label": "Cobertura 45",
+        "lat": -12.793601,
+        "lng": -75.036933
+      },
+      {
+        "code": "COB_46",
+        "label": "Cobertura 46",
+        "lat": -12.793852,
+        "lng": -75.03778
+      },
+      {
+        "code": "COB_47",
+        "label": "Cobertura 47",
+        "lat": -12.793789,
+        "lng": -75.038836
+      },
+      {
+        "code": "COB_48",
+        "label": "Cobertura 48",
+        "lat": -12.793529,
+        "lng": -75.039493
+      },
+      {
+        "code": "COB_49",
+        "label": "Cobertura 49",
+        "lat": -12.792856,
+        "lng": -75.040299
+      },
+      {
+        "code": "COB_50",
+        "label": "Cobertura 50",
+        "lat": -12.791934,
+        "lng": -75.040788
+      },
+      {
+        "code": "COB_51",
+        "label": "Cobertura 51",
+        "lat": -12.790899,
+        "lng": -75.040886
+      },
+      {
+        "code": "COB_52",
+        "label": "Cobertura 52",
+        "lat": -12.789904,
+        "lng": -75.040579
       }
     ]
   },
