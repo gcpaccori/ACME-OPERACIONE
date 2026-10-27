@@ -139,6 +139,10 @@ def create_courier_quote(
                 wait_or_second_visit=payload.wait_or_second_visit,
                 fulfillment_type=payload.fulfillment_type,
                 zone_overrides=zone_overrides,
+                destination_lat=float(client_lat) if has_client_coords else None,
+                destination_lng=float(client_lng) if has_client_coords else None,
+                origin_lat=float(branch_lat) if has_branch_coords else None,
+                origin_lng=float(branch_lng) if has_branch_coords else None,
             )
             branch_quotes[branch_id] = (branch_distance, branch_tariff)
 

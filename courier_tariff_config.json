@@ -1155,5 +1155,937 @@
       "description": "Tarifa fuera del casco urbano con costo por kilometro",
       "base_fee": 10
     }
-  ]
+  ],
+  "sector_pricing": {
+    "enabled": true,
+    "source": "Precios que dio el dueño en el chat del 22/10/2026 al recorrer la ciudad; el centro cobra 7 (\"de ahí hacia el centro 7\")",
+    "rule": "El destino paga el precio del punto de referencia mas cercano. Si el local esta fuera del centro, se cobra el mayor entre el precio del local y el del destino.",
+    "center_fee": 7,
+    "points": [
+      {
+        "lat": -12.7821033,
+        "lng": -74.9481683,
+        "fee": 15,
+        "sector": "Este, zona alta",
+        "source": "chat 22/10 7:22 p. m."
+      },
+      {
+        "lat": -12.782165,
+        "lng": -74.9479517,
+        "fee": 15,
+        "sector": "Este, zona alta",
+        "source": "chat 22/10 7:22 p. m."
+      },
+      {
+        "lat": -12.78156,
+        "lng": -74.94831,
+        "fee": 15,
+        "sector": "Este, zona alta",
+        "source": "chat 22/10 7:24 p. m."
+      },
+      {
+        "lat": -12.78103,
+        "lng": -74.94471,
+        "fee": 15,
+        "sector": "Este, zona alta",
+        "source": "chat 22/10 7:36 p. m."
+      },
+      {
+        "lat": -12.78181,
+        "lng": -74.9429083,
+        "fee": 15,
+        "sector": "Este, zona alta",
+        "source": "chat 22/10 7:38 p. m."
+      },
+      {
+        "lat": -12.78435,
+        "lng": -74.942035,
+        "fee": 12,
+        "sector": "Zona del nightclub",
+        "source": "chat 22/10 7:42 p. m."
+      },
+      {
+        "lat": -12.78394,
+        "lng": -74.94129,
+        "fee": 12,
+        "sector": "Zona del nightclub",
+        "source": "chat 22/10 7:42 p. m."
+      },
+      {
+        "lat": -12.780315,
+        "lng": -74.9364733,
+        "fee": 12,
+        "sector": "Zona del nightclub",
+        "source": "chat 22/10 7:46 p. m."
+      },
+      {
+        "lat": -12.782125,
+        "lng": -74.9377567,
+        "fee": 12,
+        "sector": "Zona del nightclub",
+        "source": "chat 22/10 7:47 p. m."
+      },
+      {
+        "lat": -12.7849483,
+        "lng": -74.9413783,
+        "fee": 12,
+        "sector": "Zona del nightclub",
+        "source": "chat 22/10 7:48 p. m."
+      },
+      {
+        "lat": -12.7863267,
+        "lng": -74.9453283,
+        "fee": 10,
+        "sector": "Bajada este",
+        "source": "chat 22/10 7:51 p. m."
+      },
+      {
+        "lat": -12.7859267,
+        "lng": -74.9497467,
+        "fee": 10,
+        "sector": "Bajada este",
+        "source": "chat 22/10 7:53 p. m."
+      },
+      {
+        "lat": -12.7805233,
+        "lng": -74.95279,
+        "fee": 9,
+        "sector": "Bajada este",
+        "source": "chat 22/10 7:54 p. m."
+      },
+      {
+        "lat": -12.783969,
+        "lng": -74.9590528,
+        "fee": 9,
+        "sector": "Bajada este",
+        "source": "chat 22/10 7:56 p. m."
+      },
+      {
+        "lat": -12.7831217,
+        "lng": -74.9561167,
+        "fee": 8,
+        "sector": "Bajada este, inicio de ciudad",
+        "source": "chat 22/10 7:57 p. m."
+      },
+      {
+        "lat": -12.7906583,
+        "lng": -74.9472017,
+        "fee": 10,
+        "sector": "Huaylacucho",
+        "source": "chat 22/10 8:07 p. m."
+      },
+      {
+        "lat": -12.79237,
+        "lng": -74.945315,
+        "fee": 10,
+        "sector": "Huaylacucho",
+        "source": "chat 22/10 8:09 p. m."
+      },
+      {
+        "lat": -12.7982333,
+        "lng": -74.9432433,
+        "fee": 10,
+        "sector": "Huaylacucho",
+        "source": "chat 22/10 8:16 p. m."
+      },
+      {
+        "lat": -12.7910868,
+        "lng": -74.9465511,
+        "fee": 10,
+        "sector": "Huaylacucho",
+        "source": "chat 22/10 8:18 p. m."
+      },
+      {
+        "lat": -12.78582,
+        "lng": -74.9484533,
+        "fee": 9,
+        "sector": "Friaspata",
+        "source": "chat 22/10 8:20 p. m."
+      },
+      {
+        "lat": -12.78547,
+        "lng": -74.9546833,
+        "fee": 9,
+        "sector": "Friaspata",
+        "source": "chat 22/10 8:23 p. m."
+      },
+      {
+        "lat": -12.784185,
+        "lng": -74.9550533,
+        "fee": 9,
+        "sector": "Friaspata",
+        "source": "chat 22/10 8:33 p. m."
+      },
+      {
+        "lat": -12.784556,
+        "lng": -74.9555596,
+        "fee": 8,
+        "sector": "Friaspata",
+        "source": "chat 22/10 8:35 p. m."
+      },
+      {
+        "lat": -12.7892867,
+        "lng": -74.9908733,
+        "fee": 9,
+        "sector": "San Geronimo",
+        "source": "chat 22/10 9:07 p. m."
+      },
+      {
+        "lat": -12.784761,
+        "lng": -74.9908285,
+        "fee": 9,
+        "sector": "San Geronimo",
+        "source": "chat 22/10 9:11 p. m."
+      },
+      {
+        "lat": -12.7848383,
+        "lng": -74.99667,
+        "fee": 12,
+        "sector": "San Geronimo alto",
+        "source": "chat 22/10 9:21 p. m."
+      },
+      {
+        "lat": -12.7838717,
+        "lng": -74.9972883,
+        "fee": 12,
+        "sector": "San Geronimo alto",
+        "source": "chat 22/10 9:23 p. m."
+      },
+      {
+        "lat": -12.7828283,
+        "lng": -74.9969767,
+        "fee": 12,
+        "sector": "San Geronimo alto",
+        "source": "chat 22/10 9:25 p. m."
+      },
+      {
+        "lat": -12.7840233,
+        "lng": -74.9956267,
+        "fee": 12,
+        "sector": "San Geronimo alto",
+        "source": "chat 22/10 9:27 p. m."
+      },
+      {
+        "lat": -12.7851633,
+        "lng": -74.9949617,
+        "fee": 12,
+        "sector": "San Geronimo alto",
+        "source": "chat 22/10 9:28 p. m."
+      },
+      {
+        "lat": -12.78516,
+        "lng": -74.9949783,
+        "fee": 12,
+        "sector": "San Geronimo alto",
+        "source": "chat 22/10 9:30 p. m."
+      },
+      {
+        "lat": -12.78168,
+        "lng": -74.9949183,
+        "fee": 12,
+        "sector": "San Geronimo alto",
+        "source": "chat 22/10 9:32 p. m."
+      },
+      {
+        "lat": -12.7835367,
+        "lng": -74.993735,
+        "fee": 11,
+        "sector": "San Geronimo alto",
+        "source": "chat 22/10 9:34 p. m."
+      },
+      {
+        "lat": -12.785415,
+        "lng": -74.9917017,
+        "fee": 9,
+        "sector": "San Geronimo",
+        "source": "chat 22/10 9:36 p. m."
+      },
+      {
+        "lat": -12.7851517,
+        "lng": -74.9919133,
+        "fee": 8,
+        "sector": "San Geronimo bajo",
+        "source": "chat 22/10 9:38 p. m."
+      },
+      {
+        "lat": -12.7835283,
+        "lng": -74.992655,
+        "fee": 8,
+        "sector": "San Geronimo bajo",
+        "source": "chat 22/10 9:38 p. m."
+      },
+      {
+        "lat": -12.7850417,
+        "lng": -74.990865,
+        "fee": 8,
+        "sector": "San Geronimo bajo",
+        "source": "chat 22/10 9:40 p. m."
+      },
+      {
+        "lat": -12.783865,
+        "lng": -74.9912483,
+        "fee": 8,
+        "sector": "San Geronimo bajo",
+        "source": "chat 22/10 9:41 p. m."
+      },
+      {
+        "lat": -12.77996,
+        "lng": -74.9947367,
+        "fee": 8,
+        "sector": "San Geronimo bajo",
+        "source": "chat 22/10 9:44 p. m."
+      },
+      {
+        "lat": -12.7798083,
+        "lng": -74.9947833,
+        "fee": 9,
+        "sector": "San Geronimo",
+        "source": "chat 22/10 9:45 p. m."
+      },
+      {
+        "lat": -12.7779817,
+        "lng": -75.0001683,
+        "fee": 9,
+        "sector": "San Geronimo",
+        "source": "chat 22/10 9:46 p. m."
+      },
+      {
+        "lat": -12.7778833,
+        "lng": -75.0003667,
+        "fee": 10,
+        "sector": "Salida oeste",
+        "source": "chat 22/10 9:47 p. m."
+      },
+      {
+        "lat": -12.7750967,
+        "lng": -75.014265,
+        "fee": 10,
+        "sector": "Salida oeste",
+        "source": "chat 22/10 9:51 p. m."
+      },
+      {
+        "lat": -12.7750017,
+        "lng": -75.014375,
+        "fee": 15,
+        "sector": "Salida oeste, carretera",
+        "source": "chat 22/10 9:51 p. m."
+      },
+      {
+        "lat": -12.79117,
+        "lng": -75.0381433,
+        "fee": 15,
+        "sector": "Salida oeste, carretera",
+        "source": "chat 22/10 9:59 p. m."
+      },
+      {
+        "lat": -12.7736333,
+        "lng": -75.0246217,
+        "fee": 12,
+        "sector": "Troncoso alto",
+        "source": "chat 22/10 10:14 p. m."
+      },
+      {
+        "lat": -12.77343,
+        "lng": -75.022995,
+        "fee": 12,
+        "sector": "Troncoso alto",
+        "source": "chat 22/10 10:16 p. m."
+      },
+      {
+        "lat": -12.7733083,
+        "lng": -75.02274,
+        "fee": 10,
+        "sector": "Troncoso",
+        "source": "chat 22/10 10:17 p. m."
+      },
+      {
+        "lat": -12.772095,
+        "lng": -75.008825,
+        "fee": 10,
+        "sector": "Troncoso",
+        "source": "chat 22/10 10:21 p. m."
+      },
+      {
+        "lat": -12.77225,
+        "lng": -75.0087333,
+        "fee": 9,
+        "sector": "Troncoso bajo",
+        "source": "chat 22/10 10:22 p. m."
+      },
+      {
+        "lat": -12.7773817,
+        "lng": -74.9979367,
+        "fee": 9,
+        "sector": "Troncoso bajo",
+        "source": "chat 22/10 10:28 p. m."
+      },
+      {
+        "lat": -12.7775467,
+        "lng": -74.997965,
+        "fee": 8,
+        "sector": "Troncoso, entrada a ciudad",
+        "source": "chat 22/10 10:29 p. m."
+      },
+      {
+        "lat": -12.7802533,
+        "lng": -74.9846617,
+        "fee": 8,
+        "sector": "Ascension",
+        "source": "chat 22/10 10:37 p. m."
+      },
+      {
+        "lat": -12.7808317,
+        "lng": -74.981975,
+        "fee": 8,
+        "sector": "Ascension",
+        "source": "chat 22/10 10:39 p. m."
+      },
+      {
+        "lat": -12.7808767,
+        "lng": -74.9569867,
+        "fee": 9,
+        "sector": "Tres Boas",
+        "source": "chat 22/10 10:52 p. m."
+      },
+      {
+        "lat": -12.7808267,
+        "lng": -74.9600433,
+        "fee": 9,
+        "sector": "Tres Boas",
+        "source": "chat 22/10 10:55 p. m."
+      },
+      {
+        "lat": -12.78082,
+        "lng": -74.9600617,
+        "fee": 7,
+        "sector": "Centro",
+        "source": "chat 22/10 10:56 p. m."
+      },
+      {
+        "lat": -12.7793583,
+        "lng": -74.9581067,
+        "fee": 8,
+        "sector": "Cuadrado cerca a Tres Boas",
+        "source": "chat 22/10 11:06 p. m."
+      },
+      {
+        "lat": -12.7792667,
+        "lng": -74.9586633,
+        "fee": 8,
+        "sector": "Cuadrado cerca a Tres Boas",
+        "source": "chat 22/10 11:07 p. m."
+      },
+      {
+        "lat": -12.805088,
+        "lng": -74.976934,
+        "fee": 7,
+        "sector": "Centro",
+        "source": "centro (dueño: \"hacia el centro 7\")"
+      },
+      {
+        "lat": -12.790618,
+        "lng": -74.978776,
+        "fee": 7,
+        "sector": "Centro",
+        "source": "centro (dueño: \"hacia el centro 7\")"
+      },
+      {
+        "lat": -12.790618,
+        "lng": -74.976934,
+        "fee": 7,
+        "sector": "Centro",
+        "source": "centro (dueño: \"hacia el centro 7\")"
+      },
+      {
+        "lat": -12.790618,
+        "lng": -74.975092,
+        "fee": 7,
+        "sector": "Centro",
+        "source": "centro (dueño: \"hacia el centro 7\")"
+      },
+      {
+        "lat": -12.790618,
+        "lng": -74.973249,
+        "fee": 7,
+        "sector": "Centro",
+        "source": "centro (dueño: \"hacia el centro 7\")"
+      },
+      {
+        "lat": -12.790618,
+        "lng": -74.969565,
+        "fee": 7,
+        "sector": "Centro",
+        "source": "centro (dueño: \"hacia el centro 7\")"
+      },
+      {
+        "lat": -12.78881,
+        "lng": -74.980618,
+        "fee": 7,
+        "sector": "Centro",
+        "source": "centro (dueño: \"hacia el centro 7\")"
+      },
+      {
+        "lat": -12.78881,
+        "lng": -74.978776,
+        "fee": 7,
+        "sector": "Centro",
+        "source": "centro (dueño: \"hacia el centro 7\")"
+      },
+      {
+        "lat": -12.78881,
+        "lng": -74.976934,
+        "fee": 7,
+        "sector": "Centro",
+        "source": "centro (dueño: \"hacia el centro 7\")"
+      },
+      {
+        "lat": -12.78881,
+        "lng": -74.975092,
+        "fee": 7,
+        "sector": "Centro",
+        "source": "centro (dueño: \"hacia el centro 7\")"
+      },
+      {
+        "lat": -12.78881,
+        "lng": -74.973249,
+        "fee": 7,
+        "sector": "Centro",
+        "source": "centro (dueño: \"hacia el centro 7\")"
+      },
+      {
+        "lat": -12.78881,
+        "lng": -74.971407,
+        "fee": 7,
+        "sector": "Centro",
+        "source": "centro (dueño: \"hacia el centro 7\")"
+      },
+      {
+        "lat": -12.78881,
+        "lng": -74.969565,
+        "fee": 7,
+        "sector": "Centro",
+        "source": "centro (dueño: \"hacia el centro 7\")"
+      },
+      {
+        "lat": -12.78881,
+        "lng": -74.967722,
+        "fee": 7,
+        "sector": "Centro",
+        "source": "centro (dueño: \"hacia el centro 7\")"
+      },
+      {
+        "lat": -12.78881,
+        "lng": -74.962196,
+        "fee": 7,
+        "sector": "Centro",
+        "source": "centro (dueño: \"hacia el centro 7\")"
+      },
+      {
+        "lat": -12.787001,
+        "lng": -74.980618,
+        "fee": 7,
+        "sector": "Centro",
+        "source": "centro (dueño: \"hacia el centro 7\")"
+      },
+      {
+        "lat": -12.787001,
+        "lng": -74.978776,
+        "fee": 7,
+        "sector": "Centro",
+        "source": "centro (dueño: \"hacia el centro 7\")"
+      },
+      {
+        "lat": -12.787001,
+        "lng": -74.976934,
+        "fee": 7,
+        "sector": "Centro",
+        "source": "centro (dueño: \"hacia el centro 7\")"
+      },
+      {
+        "lat": -12.787001,
+        "lng": -74.975092,
+        "fee": 7,
+        "sector": "Centro",
+        "source": "centro (dueño: \"hacia el centro 7\")"
+      },
+      {
+        "lat": -12.787001,
+        "lng": -74.973249,
+        "fee": 7,
+        "sector": "Centro",
+        "source": "centro (dueño: \"hacia el centro 7\")"
+      },
+      {
+        "lat": -12.787001,
+        "lng": -74.971407,
+        "fee": 7,
+        "sector": "Centro",
+        "source": "centro (dueño: \"hacia el centro 7\")"
+      },
+      {
+        "lat": -12.787001,
+        "lng": -74.969565,
+        "fee": 7,
+        "sector": "Centro",
+        "source": "centro (dueño: \"hacia el centro 7\")"
+      },
+      {
+        "lat": -12.787001,
+        "lng": -74.967722,
+        "fee": 7,
+        "sector": "Centro",
+        "source": "centro (dueño: \"hacia el centro 7\")"
+      },
+      {
+        "lat": -12.787001,
+        "lng": -74.96588,
+        "fee": 7,
+        "sector": "Centro",
+        "source": "centro (dueño: \"hacia el centro 7\")"
+      },
+      {
+        "lat": -12.787001,
+        "lng": -74.964038,
+        "fee": 7,
+        "sector": "Centro",
+        "source": "centro (dueño: \"hacia el centro 7\")"
+      },
+      {
+        "lat": -12.785192,
+        "lng": -74.980618,
+        "fee": 7,
+        "sector": "Centro",
+        "source": "centro (dueño: \"hacia el centro 7\")"
+      },
+      {
+        "lat": -12.785192,
+        "lng": -74.978776,
+        "fee": 7,
+        "sector": "Centro",
+        "source": "centro (dueño: \"hacia el centro 7\")"
+      },
+      {
+        "lat": -12.785192,
+        "lng": -74.976934,
+        "fee": 7,
+        "sector": "Centro",
+        "source": "centro (dueño: \"hacia el centro 7\")"
+      },
+      {
+        "lat": -12.785192,
+        "lng": -74.975092,
+        "fee": 7,
+        "sector": "Centro",
+        "source": "centro (dueño: \"hacia el centro 7\")"
+      },
+      {
+        "lat": -12.785192,
+        "lng": -74.973249,
+        "fee": 7,
+        "sector": "Centro",
+        "source": "centro (dueño: \"hacia el centro 7\")"
+      },
+      {
+        "lat": -12.785192,
+        "lng": -74.971407,
+        "fee": 7,
+        "sector": "Centro",
+        "source": "centro (dueño: \"hacia el centro 7\")"
+      },
+      {
+        "lat": -12.785192,
+        "lng": -74.969565,
+        "fee": 7,
+        "sector": "Centro",
+        "source": "centro (dueño: \"hacia el centro 7\")"
+      },
+      {
+        "lat": -12.785192,
+        "lng": -74.967722,
+        "fee": 7,
+        "sector": "Centro",
+        "source": "centro (dueño: \"hacia el centro 7\")"
+      },
+      {
+        "lat": -12.785192,
+        "lng": -74.96588,
+        "fee": 7,
+        "sector": "Centro",
+        "source": "centro (dueño: \"hacia el centro 7\")"
+      },
+      {
+        "lat": -12.785192,
+        "lng": -74.964038,
+        "fee": 7,
+        "sector": "Centro",
+        "source": "centro (dueño: \"hacia el centro 7\")"
+      },
+      {
+        "lat": -12.785192,
+        "lng": -74.962196,
+        "fee": 7,
+        "sector": "Centro",
+        "source": "centro (dueño: \"hacia el centro 7\")"
+      },
+      {
+        "lat": -12.785192,
+        "lng": -74.960353,
+        "fee": 7,
+        "sector": "Centro",
+        "source": "centro (dueño: \"hacia el centro 7\")"
+      },
+      {
+        "lat": -12.785192,
+        "lng": -74.958511,
+        "fee": 7,
+        "sector": "Centro",
+        "source": "centro (dueño: \"hacia el centro 7\")"
+      },
+      {
+        "lat": -12.783383,
+        "lng": -74.980618,
+        "fee": 7,
+        "sector": "Centro",
+        "source": "centro (dueño: \"hacia el centro 7\")"
+      },
+      {
+        "lat": -12.783383,
+        "lng": -74.978776,
+        "fee": 7,
+        "sector": "Centro",
+        "source": "centro (dueño: \"hacia el centro 7\")"
+      },
+      {
+        "lat": -12.783383,
+        "lng": -74.976934,
+        "fee": 7,
+        "sector": "Centro",
+        "source": "centro (dueño: \"hacia el centro 7\")"
+      },
+      {
+        "lat": -12.783383,
+        "lng": -74.975092,
+        "fee": 7,
+        "sector": "Centro",
+        "source": "centro (dueño: \"hacia el centro 7\")"
+      },
+      {
+        "lat": -12.783383,
+        "lng": -74.973249,
+        "fee": 7,
+        "sector": "Centro",
+        "source": "centro (dueño: \"hacia el centro 7\")"
+      },
+      {
+        "lat": -12.783383,
+        "lng": -74.971407,
+        "fee": 7,
+        "sector": "Centro",
+        "source": "centro (dueño: \"hacia el centro 7\")"
+      },
+      {
+        "lat": -12.783383,
+        "lng": -74.969565,
+        "fee": 7,
+        "sector": "Centro",
+        "source": "centro (dueño: \"hacia el centro 7\")"
+      },
+      {
+        "lat": -12.783383,
+        "lng": -74.967722,
+        "fee": 7,
+        "sector": "Centro",
+        "source": "centro (dueño: \"hacia el centro 7\")"
+      },
+      {
+        "lat": -12.783383,
+        "lng": -74.96588,
+        "fee": 7,
+        "sector": "Centro",
+        "source": "centro (dueño: \"hacia el centro 7\")"
+      },
+      {
+        "lat": -12.783383,
+        "lng": -74.964038,
+        "fee": 7,
+        "sector": "Centro",
+        "source": "centro (dueño: \"hacia el centro 7\")"
+      },
+      {
+        "lat": -12.783383,
+        "lng": -74.962196,
+        "fee": 7,
+        "sector": "Centro",
+        "source": "centro (dueño: \"hacia el centro 7\")"
+      },
+      {
+        "lat": -12.783383,
+        "lng": -74.960353,
+        "fee": 7,
+        "sector": "Centro",
+        "source": "centro (dueño: \"hacia el centro 7\")"
+      },
+      {
+        "lat": -12.783383,
+        "lng": -74.958511,
+        "fee": 7,
+        "sector": "Centro",
+        "source": "centro (dueño: \"hacia el centro 7\")"
+      },
+      {
+        "lat": -12.781575,
+        "lng": -74.980618,
+        "fee": 7,
+        "sector": "Centro",
+        "source": "centro (dueño: \"hacia el centro 7\")"
+      },
+      {
+        "lat": -12.781575,
+        "lng": -74.973249,
+        "fee": 7,
+        "sector": "Centro",
+        "source": "centro (dueño: \"hacia el centro 7\")"
+      },
+      {
+        "lat": -12.781575,
+        "lng": -74.971407,
+        "fee": 7,
+        "sector": "Centro",
+        "source": "centro (dueño: \"hacia el centro 7\")"
+      },
+      {
+        "lat": -12.781575,
+        "lng": -74.969565,
+        "fee": 7,
+        "sector": "Centro",
+        "source": "centro (dueño: \"hacia el centro 7\")"
+      },
+      {
+        "lat": -12.781575,
+        "lng": -74.967722,
+        "fee": 7,
+        "sector": "Centro",
+        "source": "centro (dueño: \"hacia el centro 7\")"
+      },
+      {
+        "lat": -12.781575,
+        "lng": -74.96588,
+        "fee": 7,
+        "sector": "Centro",
+        "source": "centro (dueño: \"hacia el centro 7\")"
+      },
+      {
+        "lat": -12.781575,
+        "lng": -74.964038,
+        "fee": 7,
+        "sector": "Centro",
+        "source": "centro (dueño: \"hacia el centro 7\")"
+      },
+      {
+        "lat": -12.781575,
+        "lng": -74.962196,
+        "fee": 7,
+        "sector": "Centro",
+        "source": "centro (dueño: \"hacia el centro 7\")"
+      },
+      {
+        "lat": -12.779766,
+        "lng": -74.973249,
+        "fee": 7,
+        "sector": "Centro",
+        "source": "centro (dueño: \"hacia el centro 7\")"
+      },
+      {
+        "lat": -12.779766,
+        "lng": -74.971407,
+        "fee": 7,
+        "sector": "Centro",
+        "source": "centro (dueño: \"hacia el centro 7\")"
+      },
+      {
+        "lat": -12.779766,
+        "lng": -74.969565,
+        "fee": 7,
+        "sector": "Centro",
+        "source": "centro (dueño: \"hacia el centro 7\")"
+      },
+      {
+        "lat": -12.779766,
+        "lng": -74.967722,
+        "fee": 7,
+        "sector": "Centro",
+        "source": "centro (dueño: \"hacia el centro 7\")"
+      },
+      {
+        "lat": -12.779766,
+        "lng": -74.96588,
+        "fee": 7,
+        "sector": "Centro",
+        "source": "centro (dueño: \"hacia el centro 7\")"
+      },
+      {
+        "lat": -12.779766,
+        "lng": -74.964038,
+        "fee": 7,
+        "sector": "Centro",
+        "source": "centro (dueño: \"hacia el centro 7\")"
+      },
+      {
+        "lat": -12.779766,
+        "lng": -74.962196,
+        "fee": 7,
+        "sector": "Centro",
+        "source": "centro (dueño: \"hacia el centro 7\")"
+      },
+      {
+        "lat": -12.779766,
+        "lng": -74.960353,
+        "fee": 7,
+        "sector": "Centro",
+        "source": "centro (dueño: \"hacia el centro 7\")"
+      },
+      {
+        "lat": -12.779766,
+        "lng": -74.958511,
+        "fee": 7,
+        "sector": "Centro",
+        "source": "centro (dueño: \"hacia el centro 7\")"
+      },
+      {
+        "lat": -12.777957,
+        "lng": -74.962196,
+        "fee": 7,
+        "sector": "Centro",
+        "source": "centro (dueño: \"hacia el centro 7\")"
+      },
+      {
+        "lat": -12.777957,
+        "lng": -74.960353,
+        "fee": 7,
+        "sector": "Centro",
+        "source": "centro (dueño: \"hacia el centro 7\")"
+      },
+      {
+        "lat": -12.777957,
+        "lng": -74.958511,
+        "fee": 7,
+        "sector": "Centro",
+        "source": "centro (dueño: \"hacia el centro 7\")"
+      },
+      {
+        "lat": -12.776148,
+        "lng": -74.962196,
+        "fee": 7,
+        "sector": "Centro",
+        "source": "centro (dueño: \"hacia el centro 7\")"
+      },
+      {
+        "lat": -12.77434,
+        "lng": -74.962196,
+        "fee": 7,
+        "sector": "Centro",
+        "source": "centro (dueño: \"hacia el centro 7\")"
+      }
+    ]
+  }
 }

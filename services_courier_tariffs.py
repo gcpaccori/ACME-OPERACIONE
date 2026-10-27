@@ -141,6 +141,44 @@ def detect_huancavelica_coverage(
     }
 
 
+def _haversine_km(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    dp = p2 - p1
+    dl = math.radians(lng2 - lng1)
+    a = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
+    return 2 * 6371.0 * math.asin(math.sqrt(a))
+
+
+def sector_fee_for_point(
+    lat: float | None,
+    lng: float | None,
+    config: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
+    """Precio por sector del dueño: el del punto de referencia mas cercano."""
+    cfg = config or load_tariff_config()
+    pricing = cfg.get("sector_pricing") or {}
+    if not pricing.get("enabled") or lat is None or lng is None:
+        return None
+    best: dict[str, Any] | None = None
+    best_km = math.inf
+    for raw in pricing.get("points") or []:
+        p_lat = _number(raw.get("lat"), math.nan)
+        p_lng = _number(raw.get("lng"), math.nan)
+        if not math.isfinite(p_lat) or not math.isfinite(p_lng):
+            continue
+        km = _haversine_km(float(lat), float(lng), p_lat, p_lng)
+        if km < best_km:
+            best_km = km
+            best = raw
+    if best is None:
+        return None
+    return {
+        "fee": _number(best.get("fee"), _number(pricing.get("center_fee"), 7.0)),
+        "sector": str(best.get("sector") or "Centro"),
+        "distance_km": round(best_km, 3),
+    }
+
+
 def extract_zone_code(value: str | None) -> str | None:
     normalized = (value or "").strip().upper()
     if normalized in {"A", "B", "C", "D"}:
@@ -203,6 +241,10 @@ def calculate_courier_tariff(
     wait_or_second_visit: bool = False,
     fulfillment_type: str = "delivery",
     zone_overrides: dict[str, TariffZoneOverride] | None = None,
+    destination_lat: float | None = None,
+    destination_lng: float | None = None,
+    origin_lat: float | None = None,
+    origin_lng: float | None = None,
 ) -> dict[str, Any]:
     config = load_tariff_config()
     if fulfillment_type == "pickup":
@@ -230,17 +272,39 @@ def calculate_courier_tariff(
     zone_config = _zone_from_config(config, zone_code) or {}
     override = overrides.get(zone_code)
 
+    # Dentro de la ciudad manda el precio por sector del dueño, salvo que se
+    # pida una zona a mano. Fuera de cobertura sigue la Zona D por kilometro.
+    dest_sector = None
+    if zone_code != "D" and not extract_zone_code(zone):
+        dest_sector = sector_fee_for_point(destination_lat, destination_lng, config)
+
     if zone_code == "D":
         outside_cfg = config.get("outside_city", {})
         base_fee = _number(outside_cfg.get("base_fee"), _number(zone_config.get("base_fee"), 10.0))
         per_km = _number(outside_cfg.get("cost_per_km"), 2.0)
         tariff_base = base_fee + (distance * per_km)
+    elif dest_sector:
+        tariff_base = dest_sector["fee"]
     else:
         base_fee = override.base_fee if override and override.base_fee is not None else zone_config.get("base_fee")
         tariff_base = _number(base_fee, 0.0)
 
     zone_label = override.label if override else str(zone_config.get("label") or f"Zona {zone_code}")
     detail = str(zone_config.get("description") or zone_config.get("name") or zone_label)
+    if dest_sector:
+        zone_code = "S"
+        zone_label = f"Sector {dest_sector['sector']}"
+        detail = f"Precio por sector del dueño: {dest_sector['sector']} S/ {dest_sector['fee']:.2f}"
+        origin_sector = None
+        if point_in_coverage_polygon(origin_lat, origin_lng, config):
+            origin_sector = sector_fee_for_point(origin_lat, origin_lng, config)
+        if origin_sector and origin_sector["fee"] > tariff_base:
+            tariff_base = origin_sector["fee"]
+            zone_label = f"Sector {origin_sector['sector']} (local)"
+            detail = (
+                f"El local esta en {origin_sector['sector']} (S/ {origin_sector['fee']:.2f}), "
+                f"mas que el destino {dest_sector['sector']} (S/ {dest_sector['fee']:.2f}); se cobra el mayor"
+            )
     surcharges: list[dict[str, Any]] = []
 
     service_rate = _number((config.get("service_surcharges") or {}).get(service), 0.0)
@@ -292,6 +356,6 @@ def calculate_courier_tariff(
         "tarifa_final": final_total,
         "zona_codigo": zone_code,
         "zona_aplicada": zone_label,
-        "zona_id": override.zone_id if override else None,
+        "zona_id": override.zone_id if override and not dest_sector else None,
         "detalle_calculo": detail,
     }
