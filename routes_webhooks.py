@@ -255,6 +255,23 @@ async def culqi_webhook(request: Request):
     return {"received": True}
 
 
+def _revivir_pedido_vencido(order_id: str) -> None:
+    """
+    Llego el pago de un pedido cancelado. Si lo vencio el sistema hace poco (un
+    yapeo atrasado, un CIP pagado al limite), vuelve a esperar pago para que
+    release_paid_order lo mande a operaciones. Si lo cancelo una persona, o
+    vencio hace mas de 2 horas, queda cancelado y pagado: el admin devuelve el
+    dinero.
+    """
+    try:
+        if SupabaseCourierPayments().revive_expired_order(order_id):
+            logger.info("pago_tardio pedido=%s: el pedido vencido vuelve a operaciones", order_id)
+            return
+    except Exception as exc:
+        logger.error("pago_tardio pedido=%s: no se pudo revisar el vencimiento: %s", order_id, exc)
+    logger.error("pago_tardio pedido=%s: el pedido esta cancelado y se pago; requiere devolucion", order_id)
+
+
 def apply_verified_status(
     event_type: str,
     new_status: str,
@@ -279,7 +296,7 @@ def apply_verified_status(
     try:
         order_rows = _sb_get(
             "orders",
-            {"select": "id,total,payment_status,order_group_id", "id": f"eq.{order_id}", "limit": "1"},
+            {"select": "id,total,status,payment_status,order_group_id", "id": f"eq.{order_id}", "limit": "1"},
         )
         if not order_rows:
             logger.warning("culqi_webhook: pedido %s no existe", order_id)
@@ -301,6 +318,8 @@ def apply_verified_status(
                     order_id, expected, paid_amount,
                 )
                 return None
+            if order.get("status") == "cancelled":
+                _revivir_pedido_vencido(order_id)
         elif current_status == "paid":
             # Un cargo fallido o una orden vencida no deshacen un pago ya confirmado.
             return None

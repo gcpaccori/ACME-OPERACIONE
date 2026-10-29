@@ -6,6 +6,8 @@ import uuid
 from fastapi import APIRouter, Header, HTTPException, Request
 
 from models import (
+    CourierCancelOrderRequest,
+    CourierCancelOrderResponse,
     CourierPaymentChargeRequest,
     CourierPaymentChargeResponse,
     CourierPaymentOrderRequest,
@@ -912,41 +914,134 @@ def sync_courier_payment(
         order = supabase.get_order(payload.order_id, token)
         require_order_owner(token, order)
         order_id = str(order["id"])
-        status = str(order.get("payment_status") or "pending")
-
-        if status != "paid":
-            applied = None
-            # Order/Get responde "sin transacciones" a los pedidos que nunca se
-            # abrieron en Izipay, asi que se puede consultar siempre.
-            if izipay_sdk_service().configured:
-                try:
-                    applied = sync_izipay_sdk_order(order_id)
-                except IzipaySdkUnavailable as exc:
-                    logger.warning("courier_payment_sync_izipay_sdk_unavailable order_id=%s: %s", order_id, exc)
-            if not applied and izipay_service().configured:
-                try:
-                    applied = sync_izipay_order(order_id)
-                except IzipayUnavailable as exc:
-                    logger.warning("courier_payment_sync_izipay_unavailable order_id=%s: %s", order_id, exc)
-            if not applied:
-                pending = supabase.find_pending_payment(order_id, token)
-                reference = str((pending or {}).get("external_reference") or "").strip()
-                if reference.startswith("ord_"):
-                    try:
-                        applied = sync_culqi_order(reference)
-                    except CulqiUnavailable as exc:
-                        logger.warning("courier_payment_sync_unavailable order_id=%s: %s", order_id, exc)
-            if applied:
-                status = applied
-        else:
-            # Por si el pago quedo registrado pero el pedido no alcanzo a salir.
-            _release_paid_order(supabase, order_id, token)
-
-        return CourierPaymentSyncResponse(order_id=order_id, payment_status=status)
+        status = _sincronizar_pago(supabase, order, token)
+        order_status = order.get("status")
+        if status == "paid" and status != order.get("payment_status"):
+            # El pago recien aplicado lo libero (o revivio, si habia vencido).
+            order_status = supabase.get_order(order_id, token).get("status")
+        if status != "paid" and order_status == "pending_payment" and _vencer_si_corresponde(supabase, order_id):
+            order_status = "cancelled"
+        return CourierPaymentSyncResponse(order_id=order_id, payment_status=status, order_status=order_status)
     except HTTPException:
         raise
     except SupabaseCourierError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+def _vencer_si_corresponde(supabase: SupabaseCourierPayments, order_id: str) -> bool:
+    """Vence el pedido si ya paso su plazo para pagar (lo mismo que hace pg_cron cada 5 minutos)."""
+    try:
+        return supabase.expire_unpaid_order(order_id) > 0
+    except SupabaseCourierError as exc:
+        logger.warning("courier_order_expire_failed order_id=%s: %s", order_id, exc)
+        return False
+
+
+class _PasarelaSinRespuesta(Exception):
+    pass
+
+
+def _sin_respuesta(estricto: bool, mensaje: str, order_id: str, exc: Exception) -> None:
+    logger.warning(mensaje, order_id, exc)
+    if estricto:
+        raise _PasarelaSinRespuesta() from exc
+
+
+def _sincronizar_pago(supabase: SupabaseCourierPayments, order: dict, token: str, estricto: bool = False) -> str:
+    """
+    Consulta en las pasarelas si el pedido ya se pago y lo aplica. Devuelve su
+    payment_status. Con estricto, si una pasarela no responde lanza
+    _PasarelaSinRespuesta: no se sabe si el pago se hizo.
+    """
+    order_id = str(order["id"])
+    status = str(order.get("payment_status") or "pending")
+    if status != "paid":
+        applied = None
+        # Order/Get responde "sin transacciones" a los pedidos que nunca se
+        # abrieron en Izipay, asi que se puede consultar siempre.
+        if izipay_sdk_service().configured:
+            try:
+                applied = sync_izipay_sdk_order(order_id)
+            except IzipaySdkUnavailable as exc:
+                _sin_respuesta(estricto, "courier_payment_sync_izipay_sdk_unavailable order_id=%s: %s", order_id, exc)
+        if not applied and izipay_service().configured:
+            try:
+                applied = sync_izipay_order(order_id)
+            except IzipayUnavailable as exc:
+                _sin_respuesta(estricto, "courier_payment_sync_izipay_unavailable order_id=%s: %s", order_id, exc)
+        if not applied:
+            pending = supabase.find_pending_payment(order_id, token)
+            reference = str((pending or {}).get("external_reference") or "").strip()
+            if reference.startswith("ord_"):
+                try:
+                    applied = sync_culqi_order(reference)
+                except CulqiUnavailable as exc:
+                    _sin_respuesta(estricto, "courier_payment_sync_unavailable order_id=%s: %s", order_id, exc)
+        if applied:
+            status = applied
+    else:
+        # Por si el pago quedo registrado pero el pedido no alcanzo a salir.
+        _release_paid_order(supabase, order_id, token)
+    return status
+
+
+@router.post("/cancel", response_model=CourierCancelOrderResponse)
+def cancel_unpaid_order(
+    payload: CourierCancelOrderRequest,
+    authorization: str | None = Header(default=None),
+):
+    """
+    El cliente cancela su pedido mientras siga sin pagar, para no quedar atado a
+    el: vuelve al carrito con sus productos y arma otro. Antes se confirma con
+    las pasarelas que el pago no se hizo, y si hay un cobro de Yape directo
+    abierto se cierra en acme-yape, para que un yapeo que llegue despues no
+    pague un pedido cancelado. Si su yapeo ya llego o se esta verificando, no
+    se cancela.
+    """
+    order = _pedido_del_cliente(payload.order_id, authorization)
+    token = bearer_token(authorization)
+    order_id = str(order["id"])
+    supabase = SupabaseCourierPayments()
+    try:
+        if order.get("status") != "cancelled":
+            try:
+                pagado = _sincronizar_pago(supabase, order, token, estricto=True) == "paid"
+            except _PasarelaSinRespuesta as exc:
+                raise HTTPException(
+                    status_code=503,
+                    detail="No pudimos confirmar si tu pago se hizo. Intenta cancelar en un momento.",
+                ) from exc
+            if pagado:
+                raise HTTPException(status_code=409, detail="Tu pago ya se confirmo; tu pedido sigue en curso.")
+            _cerrar_cobro_yape(supabase, order_id, token)
+        resultado = supabase.cancel_unpaid_order(order_id, payload.motivo)
+    except SupabaseCourierError as exc:
+        detalle = str(exc)
+        if "ya esta" in detalle:
+            raise HTTPException(status_code=409, detail="Este pedido ya esta pagado o en proceso; ya no se puede cancelar.") from exc
+        raise HTTPException(status_code=500, detail=detalle) from exc
+    logger.info("courier_order_cancelled_by_customer order_id=%s", order_id)
+    return CourierCancelOrderResponse(order_id=order_id, status="cancelled", items=resultado.get("items") or [])
+
+
+def _cerrar_cobro_yape(supabase: SupabaseCourierPayments, order_id: str, token: str | None) -> None:
+    pendiente = supabase.find_pending_payment(order_id, token, provider="yape_propio")
+    sesion_id = str((pendiente or {}).get("external_reference") or "").strip()
+    if not sesion_id:
+        return
+    try:
+        sesion = services_yape_propio.ver_sesion(sesion_id)
+        if sesion.get("estado") == "pagada":
+            raise HTTPException(status_code=409, detail="Tu yapeo ya llego; tu pedido se esta confirmando.")
+        if sesion.get("declaro_pago") or int(sesion.get("abonado_centimos") or 0) > 0 or sesion.get("pago_por_verificar"):
+            raise HTTPException(
+                status_code=409,
+                detail="Estamos verificando tu yapeo. Espera unos minutos antes de cancelar el pedido.",
+            )
+        if sesion.get("estado") == "abierta":
+            services_yape_propio.cancelar_sesion(sesion_id)
+    except YapePropioError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.mensaje) from exc
 
 
 # ─── Reclamo autoatendido de Yape directo ────────────────────────────────────

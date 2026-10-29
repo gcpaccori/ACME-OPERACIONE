@@ -200,6 +200,20 @@ class CourierPaymentSyncRequest(BaseModel):
 class CourierPaymentSyncResponse(BaseModel):
     order_id: str
     payment_status: str
+    # "cancelled" si el pedido vencio sin pagarse.
+    order_status: Optional[str] = None
+
+
+class CourierCancelOrderRequest(BaseModel):
+    order_id: str
+    motivo: Optional[str] = Field(default=None, max_length=300)
+
+
+class CourierCancelOrderResponse(BaseModel):
+    order_id: str
+    status: str
+    # Productos del pedido, para volver a armar el carrito.
+    items: list[dict] = []
 
 
 class CourierPaymentChargeResponse(BaseModel):

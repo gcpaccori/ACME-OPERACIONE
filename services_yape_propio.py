@@ -69,6 +69,22 @@ def _llamar(metodo: str, ruta: str, **kwargs) -> dict[str, Any]:
                           "No se pudo consultar el reclamo de tu pago con Yape.")
 
 
+def ver_sesion(sesion_id: str) -> dict[str, Any]:
+    """Estado del cobro: si sigue abierto (tambien mientras espera al celular caido), pagado o con un yapeo por verificar."""
+    try:
+        return _llamar("GET", f"/v1/sesiones/{sesion_id}")
+    except YapePropioError as exc:
+        raise YapePropioError(exc.status_code, "No pudimos revisar tu pago con Yape. Intenta en un momento.") from exc
+
+
+def cancelar_sesion(sesion_id: str) -> dict[str, Any]:
+    """Libera el monto del cobro: un yapeo que llegue despues ya no paga este pedido."""
+    try:
+        return _llamar("POST", f"/v1/sesiones/{sesion_id}/cancelar")
+    except YapePropioError as exc:
+        raise YapePropioError(exc.status_code, "No pudimos cerrar tu pago con Yape. Intenta en un momento.") from exc
+
+
 def estado_reclamo(referencia: str) -> dict[str, Any]:
     """Si el pedido puede reclamar un yapeo no reconocido, o como quedo su reclamo."""
     return _llamar("GET", "/v1/reclamos", params={"referencia": referencia})
