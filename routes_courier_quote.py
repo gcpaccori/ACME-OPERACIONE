@@ -21,6 +21,7 @@ from services_courier_quote import (
     reverse_geocode_point,
     search_geocode_address,
 )
+from services_branch_hours import branch_closed_reason
 from services_courier_tariffs import calculate_courier_tariff, detect_huancavelica_coverage
 from services_supabase_auth import SupabaseAuthError, verify_supabase_user
 
@@ -101,6 +102,9 @@ def create_courier_quote(
         branch_quotes: dict[str, tuple[float, dict[str, Any]]] = {}
         for branch_id in branch_ids:
             branch = supabase.get_branch(branch_id, token)
+            closed_reason = branch_closed_reason(branch)
+            if closed_reason:
+                raise HTTPException(status_code=409, detail=closed_reason)
             branches[branch_id] = branch
             branch_lat = branch.get("lat")
             branch_lng = branch.get("lng")

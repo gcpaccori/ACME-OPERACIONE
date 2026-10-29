@@ -77,7 +77,12 @@ class SupabaseQuoteService:
             "merchant_branches",
             bearer_token=bearer_token,
             params={
-                "select": "id,merchant_id,lat,lng",
+                "select": (
+                    "id,merchant_id,name,status,accepts_orders,lat,lng,"
+                    "merchant_branch_status(is_open,accepting_orders,pause_reason),"
+                    "merchant_branch_hours(day_of_week,open_time,close_time,is_closed),"
+                    "merchant_branch_closures(starts_at,ends_at)"
+                ),
                 "id": f"eq.{branch_id}",
                 "limit": "1",
             },
