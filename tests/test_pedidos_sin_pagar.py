@@ -18,6 +18,7 @@ from main import app  # noqa: E402
 
 ORDER_ID = "6f1c2a0e-1111-4c4c-9999-000000000002"
 SESION_ID = "8d0b3c55-2222-4c4c-9999-000000000003"
+ORIGINAL_SINCRONIZAR = routes_courier_payments._sincronizar_pago
 ITEMS = [{"product_id": "p-1", "product_name": "Pollo", "quantity": 2}]
 
 
@@ -56,7 +57,7 @@ def cliente(monkeypatch):
         monkeypatch.setattr(routes_courier_payments, "verify_supabase_user", lambda token: duenio)
         # Las pasarelas no tienen el pago.
         monkeypatch.setattr(routes_courier_payments, "_sincronizar_pago",
-                            lambda supabase, order, token: str(order.get("payment_status") or "pending"))
+                            lambda supabase, order, token, estricto=False: str(order.get("payment_status") or "pending"))
         cerradas = []
         monkeypatch.setattr(services_yape_propio, "ver_sesion", lambda sid: sesion or {})
         monkeypatch.setattr(services_yape_propio, "cancelar_sesion", lambda sid: cerradas.append(sid) or {})
@@ -126,6 +127,36 @@ def test_sin_respuesta_de_yape_no_cancela(cliente, monkeypatch):
     res = _cancelar(client)
     assert res.status_code == 502
     assert fake.cancelados == []
+
+
+def test_no_cancela_si_la_pasarela_no_responde(cliente, monkeypatch):
+    """Sin respuesta de Izipay no se sabe si pago: cancelarlo dejaria un pago sin pedido."""
+    fake = FakeSupabase()
+    client, _ = cliente(fake)
+    monkeypatch.setattr(routes_courier_payments, "_sincronizar_pago", ORIGINAL_SINCRONIZAR)
+    monkeypatch.setattr(routes_courier_payments, "izipay_sdk_service", lambda: type("S", (), {"configured": True})())
+
+    def caida(order_id):
+        raise routes_courier_payments.IzipaySdkUnavailable("timeout")
+
+    monkeypatch.setattr(routes_courier_payments, "sync_izipay_sdk_order", caida)
+    res = _cancelar(client)
+    assert res.status_code == 503
+    assert fake.cancelados == []
+
+
+def test_sync_devuelve_el_estado_del_pedido_tras_aplicar_el_pago(cliente, monkeypatch):
+    fake = FakeSupabase(status="cancelled")
+    client, _ = cliente(fake)
+
+    def sincronizar(supabase, order, token, estricto=False):
+        # El pago tardio revivio el pedido y lo mando a operaciones.
+        fake.order.update(status="placed", payment_status="paid")
+        return "paid"
+
+    monkeypatch.setattr(routes_courier_payments, "_sincronizar_pago", sincronizar)
+    res = client.post("/api/courier/payments/sync", json={"order_id": ORDER_ID}, headers={"Authorization": "Bearer t"})
+    assert res.json() == {"order_id": ORDER_ID, "payment_status": "paid", "order_status": "placed"}
 
 
 def test_sync_vence_el_pedido_cuyo_plazo_paso(cliente):

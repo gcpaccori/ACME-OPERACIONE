@@ -916,6 +916,9 @@ def sync_courier_payment(
         order_id = str(order["id"])
         status = _sincronizar_pago(supabase, order, token)
         order_status = order.get("status")
+        if status == "paid" and status != order.get("payment_status"):
+            # El pago recien aplicado lo libero (o revivio, si habia vencido).
+            order_status = supabase.get_order(order_id, token).get("status")
         if status != "paid" and order_status == "pending_payment" and _vencer_si_corresponde(supabase, order_id):
             order_status = "cancelled"
         return CourierPaymentSyncResponse(order_id=order_id, payment_status=status, order_status=order_status)
@@ -934,8 +937,22 @@ def _vencer_si_corresponde(supabase: SupabaseCourierPayments, order_id: str) -> 
         return False
 
 
-def _sincronizar_pago(supabase: SupabaseCourierPayments, order: dict, token: str) -> str:
-    """Consulta en las pasarelas si el pedido ya se pago y lo aplica. Devuelve su payment_status."""
+class _PasarelaSinRespuesta(Exception):
+    pass
+
+
+def _sin_respuesta(estricto: bool, mensaje: str, order_id: str, exc: Exception) -> None:
+    logger.warning(mensaje, order_id, exc)
+    if estricto:
+        raise _PasarelaSinRespuesta() from exc
+
+
+def _sincronizar_pago(supabase: SupabaseCourierPayments, order: dict, token: str, estricto: bool = False) -> str:
+    """
+    Consulta en las pasarelas si el pedido ya se pago y lo aplica. Devuelve su
+    payment_status. Con estricto, si una pasarela no responde lanza
+    _PasarelaSinRespuesta: no se sabe si el pago se hizo.
+    """
     order_id = str(order["id"])
     status = str(order.get("payment_status") or "pending")
     if status != "paid":
@@ -946,12 +963,12 @@ def _sincronizar_pago(supabase: SupabaseCourierPayments, order: dict, token: str
             try:
                 applied = sync_izipay_sdk_order(order_id)
             except IzipaySdkUnavailable as exc:
-                logger.warning("courier_payment_sync_izipay_sdk_unavailable order_id=%s: %s", order_id, exc)
+                _sin_respuesta(estricto, "courier_payment_sync_izipay_sdk_unavailable order_id=%s: %s", order_id, exc)
         if not applied and izipay_service().configured:
             try:
                 applied = sync_izipay_order(order_id)
             except IzipayUnavailable as exc:
-                logger.warning("courier_payment_sync_izipay_unavailable order_id=%s: %s", order_id, exc)
+                _sin_respuesta(estricto, "courier_payment_sync_izipay_unavailable order_id=%s: %s", order_id, exc)
         if not applied:
             pending = supabase.find_pending_payment(order_id, token)
             reference = str((pending or {}).get("external_reference") or "").strip()
@@ -959,7 +976,7 @@ def _sincronizar_pago(supabase: SupabaseCourierPayments, order: dict, token: str
                 try:
                     applied = sync_culqi_order(reference)
                 except CulqiUnavailable as exc:
-                    logger.warning("courier_payment_sync_unavailable order_id=%s: %s", order_id, exc)
+                    _sin_respuesta(estricto, "courier_payment_sync_unavailable order_id=%s: %s", order_id, exc)
         if applied:
             status = applied
     else:
@@ -987,7 +1004,14 @@ def cancel_unpaid_order(
     supabase = SupabaseCourierPayments()
     try:
         if order.get("status") != "cancelled":
-            if _sincronizar_pago(supabase, order, token) == "paid":
+            try:
+                pagado = _sincronizar_pago(supabase, order, token, estricto=True) == "paid"
+            except _PasarelaSinRespuesta as exc:
+                raise HTTPException(
+                    status_code=503,
+                    detail="No pudimos confirmar si tu pago se hizo. Intenta cancelar en un momento.",
+                ) from exc
+            if pagado:
                 raise HTTPException(status_code=409, detail="Tu pago ya se confirmo; tu pedido sigue en curso.")
             _cerrar_cobro_yape(supabase, order_id, token)
         resultado = supabase.cancel_unpaid_order(order_id, payload.motivo)
