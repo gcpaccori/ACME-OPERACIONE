@@ -271,6 +271,9 @@ class CourierQuoteResponse(BaseModel):
     discount: float
     service_fee: float
     service_fee_rate: float
+    # Monto sobre el que se cobra la tarifa: el subtotal con descuento, sin las
+    # categorias exentas (Bebidas ACME) cuando acompanan a otros productos.
+    service_fee_base: float = 0.0
     delivery_fee: float
     tip_amount: float
     taxable_base: float = 0.0
