@@ -73,6 +73,25 @@ class SupabaseCourierPayments:
             return None
         return response.json()
 
+    # Pedidos sin pagar (supabase/migrations/202610290001_expire_unpaid_orders.sql
+    # en ACME-WEB): vencen solos y el cliente puede cancelarlos.
+
+    def expire_unpaid_order(self, order_id: str) -> int:
+        """Cancela el pedido (y su grupo) si su plazo para pagar ya paso. Devuelve cuantos cancelo."""
+        return int(self._request("POST", "rpc/expire_unpaid_orders", json={"p_order_id": order_id}) or 0)
+
+    def cancel_unpaid_order(self, order_id: str, reason: str | None = None) -> dict[str, Any]:
+        """Cancela el pedido sin pagar a pedido del cliente; devuelve sus productos."""
+        return self._request(
+            "POST",
+            "rpc/cancel_my_unpaid_order",
+            json={"p_order_id": order_id, "p_reason": reason},
+        ) or {}
+
+    def revive_expired_order(self, order_id: str) -> bool:
+        """Devuelve a pending_payment un pedido que vencio el sistema hace poco y cuyo pago llego igual."""
+        return bool(self._request("POST", "rpc/revive_expired_unpaid_order", json={"p_order_id": order_id}))
+
     def get_order(self, order_id: str, bearer_token: str | None = None) -> dict[str, Any]:
         rows = self._request(
             "GET",
