@@ -253,6 +253,17 @@ def create_courier_quote(
         payment_processing_note = str(processing["note"])
         total = round(payment_base + payment_processing_fee, 2)
 
+        # 13a. Yape directo: el APK de la app cliente ya instalado solo ofrece
+        # Yape directo si la comision de pago viene en cero, asi que la de BCP
+        # viaja dentro de service_fee y aparte en yape_directo_fee; la web la
+        # resta de la tarifa y la muestra como comision de pago. El total no cambia.
+        yape_directo_fee = 0.0
+        if processing.get("provider") == "yape_propio" and payment_processing_fee > 0:
+            yape_directo_fee = payment_processing_fee
+            service_fee = round(service_fee + yape_directo_fee, 2)
+            service_fee_rate = effective_service_fee_rate(delivery_fee, service_fee)
+            payment_processing_fee = 0.0
+
         # 14. Guardar cotizacion
         quote = supabase.save_quote(
             customer_id=customer_id,
@@ -299,6 +310,7 @@ def create_courier_quote(
             igv_amount=float(tax_breakdown["igv_amount"]),
             igv_added=True,
             payment_processing_fee=payment_processing_fee,
+            yape_directo_fee=yape_directo_fee,
             payment_processing_rate=float(processing["rate"]),
             payment_processing_fixed=float(processing["fixed"]),
             payment_processing_provider=str(processing["provider"]),
