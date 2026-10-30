@@ -70,11 +70,14 @@ class Settings(BaseSettings):
     # operacion (filtros de seguridad). Ajustar si el contrato dice otra cosa.
     izipay_card_rate: float = float(os.getenv("IZIPAY_CARD_RATE", "0.0344"))
     izipay_card_fixed_pen: float = float(os.getenv("IZIPAY_CARD_FIXED_PEN", "0.69"))
-    # Yape cobrado por Culqi, segun culqi.com/tarifas: desde 3.44%, comision
-    # minima de S/ 3.50 para montos menores a S/ 87.72 y "comisiones inafectas
-    # a IGV", por eso no se le suma IGV salvo que el contrato diga lo contrario.
+    # Yape cobrado por Culqi, segun culqi.com/tarifas: 3.44% + $ 0.20 (al tipo
+    # de cambio culqi_exchange_rate), comision minima de S/ 3.50 para montos
+    # menores a S/ 87.72 y "comisiones inafectas a IGV", por eso no se le suma
+    # IGV salvo que el contrato diga lo contrario.
     culqi_yape_rate: float = float(os.getenv("CULQI_YAPE_RATE", "0.0344"))
+    culqi_yape_fixed_usd: float = float(os.getenv("CULQI_YAPE_FIXED_USD", "0.20"))
     culqi_yape_min_fee_pen: float = float(os.getenv("CULQI_YAPE_MIN_FEE_PEN", "3.50"))
+    culqi_yape_min_fee_below_pen: float = float(os.getenv("CULQI_YAPE_MIN_FEE_BELOW_PEN", "87.72"))
     # Recargo al envio por cada local extra en un mismo pedido: el segundo local
     # suma 10% del envio, el tercero 15%, el cuarto 20% y el quinto 25%. El
     # numero de valores fija cuantos locales extra se aceptan.
