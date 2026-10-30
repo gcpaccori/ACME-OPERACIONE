@@ -305,7 +305,7 @@ def create_courier_quote(
             discount=discount,
             service_fee=service_fee,
             service_fee_rate=service_fee_rate,
-            service_fee_base=service_fee_base,
+            service_fee_base=delivery_fee,
             delivery_fee=delivery_fee,
             tip_amount=tip_amount,
             taxable_base=float(tax_breakdown["taxable_base"]),
