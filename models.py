@@ -271,7 +271,7 @@ class CourierQuoteResponse(BaseModel):
     discount: float
     service_fee: float
     service_fee_rate: float
-    # Monto sobre el que se cobra la tarifa: el envio (con recargo por locales).
+    # Monto sobre el que se cobra la tarifa: los productos (sin Bebidas ACME).
     service_fee_base: float = 0.0
     delivery_fee: float
     tip_amount: float

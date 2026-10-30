@@ -230,10 +230,11 @@ def create_courier_quote(
         base = subtotal - discount
         service_fee_base = service_fee_base_amount(base, service_fee_exempt_subtotal)
 
-        # 10. Tarifa ACME sobre el envio: 12% si los productos suman hasta
-        # S/ 100; si pasan de S/ 100, 8%.
-        service_fee = calculate_service_fee(delivery_fee, service_fee_base)
-        service_fee_rate = effective_service_fee_rate(delivery_fee, service_fee)
+        # 10. Tarifa ACME sobre el costo de los productos (acordado con Roger):
+        # 12% si suman hasta S/ 100; si pasan de S/ 100, 8%. La comision de la
+        # pasarela se cobra aparte, ademas de la tarifa.
+        service_fee = calculate_service_fee(service_fee_base)
+        service_fee_rate = effective_service_fee_rate(service_fee_base, service_fee)
 
         # 11. Tip
         tip_amount = round(float(payload.tip_amount), 2)
@@ -260,7 +261,7 @@ def create_courier_quote(
         yape_directo_fee = 0.0
         if processing.get("provider") == "yape_propio" and payment_processing_fee > 0:
             yape_directo_fee = payment_processing_fee
-            # service_fee_rate queda en la tasa del tramo (12%/8% del envio): las
+            # service_fee_rate queda en la tasa del tramo (12%/8% de los productos): las
             # apps la muestran como "Tarifa de servicio (12%)".
             service_fee = round(service_fee + yape_directo_fee, 2)
             payment_processing_fee = 0.0
@@ -303,7 +304,7 @@ def create_courier_quote(
             discount=discount,
             service_fee=service_fee,
             service_fee_rate=service_fee_rate,
-            service_fee_base=delivery_fee,
+            service_fee_base=service_fee_base,
             delivery_fee=delivery_fee,
             tip_amount=tip_amount,
             taxable_base=float(tax_breakdown["taxable_base"]),
