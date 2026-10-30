@@ -557,15 +557,17 @@ def calculate_delivery_fee(distance_km: float, fulfillment_type: str) -> float:
     raise ValueError("Fuera de cobertura: la distancia supera los 6 km.")
 
 
-def calculate_service_fee(base_amount: float) -> float:
-    """Tarifa de servicio sobre el subtotal neto de productos.
+def calculate_service_fee(base_amount: float, tier_amount: float | None = None) -> float:
+    """Tarifa de servicio: un porcentaje de base_amount.
 
-    12% si los productos suman hasta S/ 100; si pasan de S/ 100, 8% sobre todo
-    el monto, sin tramo de 12% (S/ 150 -> S/ 12.00).
+    El porcentaje lo decide tier_amount (por defecto, la misma base): 12% si
+    suma hasta S/ 100 y 8% si pasa de S/ 100. La cotizacion pasa el envio como
+    base y los productos como tier_amount (envio S/ 7, productos S/ 72 -> S/ 0.84).
     """
     base = max(0.0, float(base_amount))
+    tier = base if tier_amount is None else max(0.0, float(tier_amount))
     threshold = float(settings.service_fee_tier_threshold_pen)
-    if base > threshold:
+    if tier > threshold:
         rate = float(settings.service_fee_rate_above_threshold)
     else:
         rate = float(settings.service_fee_rate_up_to_threshold)
