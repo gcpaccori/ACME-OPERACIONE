@@ -278,6 +278,8 @@ class CourierQuoteResponse(BaseModel):
     taxable_base: float = 0.0
     igv_rate: float = 0.18
     igv_amount: float = 0.0
+    # True: el IGV se suma encima del envio y la tarifa (va en su propia linea).
+    igv_added: bool = False
     payment_processing_fee: float = 0.0
     payment_processing_rate: float = 0.0
     payment_processing_fixed: float = 0.0

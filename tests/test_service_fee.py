@@ -148,6 +148,12 @@ def test_cotizacion_con_dos_locales(monkeypatch):
     assert [b.subtotal for b in res.branches] == [20.0, 10.0]
     # Tarifa: 12% del envio (productos S/ 30, hasta S/ 100).
     assert res.service_fee == round(res.delivery_fee * 0.12, 2)
+    # IGV encima del envio y la tarifa: el total suma todas las lineas.
+    assert res.igv_added is True
+    assert res.igv_amount == round((res.delivery_fee + res.service_fee) * 0.18, 2)
+    assert res.total == round(
+        res.subtotal + res.delivery_fee + res.service_fee + res.igv_amount + res.tip_amount + res.payment_processing_fee, 2
+    )
     assert {i["branch_id"] for i in saved["items_snapshot"]} == {"b1", "b2"}
 
 
@@ -238,3 +244,10 @@ def test_tarifa_sobre_el_envio_con_tramo_por_productos():
     # Productos S/ 150 (mas de S/ 100) -> 8% del envio de S/ 7.50.
     assert calculate_service_fee(7.5, 150.0) == 0.6
     assert calculate_service_fee(5.0, 100.0) == 0.6
+
+
+def test_igv_se_suma_encima():
+    from services_courier_quote import calculate_added_igv
+
+    # Envio S/ 7 + tarifa S/ 0.84 -> IGV S/ 1.41; la moto recibe los S/ 7 completos.
+    assert calculate_added_igv(7.84) == {"taxable_base": 7.84, "igv_amount": 1.41, "igv_rate": 0.18}
