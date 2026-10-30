@@ -72,8 +72,8 @@ class Settings(BaseSettings):
     izipay_card_fixed_pen: float = float(os.getenv("IZIPAY_CARD_FIXED_PEN", "0.69"))
     # Yape cobrado por Culqi, segun culqi.com/tarifas: 3.44% + $ 0.20 (al tipo
     # de cambio culqi_exchange_rate), comision minima de S/ 3.50 para montos
-    # menores a S/ 87.72 y "comisiones inafectas a IGV", por eso no se le suma
-    # IGV salvo que el contrato diga lo contrario.
+    # menores a S/ 87.72. Ese minimo va sin IGV; desde S/ 87.72 Culqi si suma
+    # IGV a su 3.44% + $ 0.20 (lo confirma la liquidacion del negocio).
     culqi_yape_rate: float = float(os.getenv("CULQI_YAPE_RATE", "0.0344"))
     culqi_yape_fixed_usd: float = float(os.getenv("CULQI_YAPE_FIXED_USD", "0.20"))
     culqi_yape_min_fee_pen: float = float(os.getenv("CULQI_YAPE_MIN_FEE_PEN", "3.50"))
@@ -82,7 +82,7 @@ class Settings(BaseSettings):
     # suma 10% del envio, el tercero 15%, el cuarto 20% y el quinto 25%. El
     # numero de valores fija cuantos locales extra se aceptan.
     multi_store_delivery_surcharges: str = os.getenv("MULTI_STORE_DELIVERY_SURCHARGES", "0.10,0.15,0.20,0.25")
-    culqi_yape_apply_igv: bool = os.getenv("CULQI_YAPE_APPLY_IGV", "false").lower() == "true"
+    culqi_yape_apply_igv: bool = os.getenv("CULQI_YAPE_APPLY_IGV", "true").lower() == "true"
     
     # API
     api_host: str = os.getenv("API_HOST", "0.0.0.0")
