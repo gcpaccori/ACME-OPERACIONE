@@ -231,17 +231,17 @@ def test_los_otros_locales_no_se_cobran_solos(monkeypatch):
 
 
 def test_extra_de_yape_directo_es_el_porcentaje_del_total(monkeypatch):
-    from services_courier_quote import yape_directo_service_fee_extra
+    from services_courier_quote import yape_directo_payment_fee
 
     monkeypatch.setattr(settings, "yape_directo_fee_rate", 0.035)
     # Pollo de S/ 11 + envio S/ 5 + tarifa S/ 1.32 = S/ 17.32 -> extra S/ 0.63.
-    assert yape_directo_service_fee_extra(17.32) == 0.63
+    assert yape_directo_payment_fee(17.32) == 0.63
     # S/ 50.80 -> S/ 1.84, que es el 3.5% del total final S/ 52.64.
-    assert yape_directo_service_fee_extra(50.80) == 1.84
+    assert yape_directo_payment_fee(50.80) == 1.84
     assert round(52.64 * 0.035, 2) == 1.84
-    assert yape_directo_service_fee_extra(0) == 0.0
+    assert yape_directo_payment_fee(0) == 0.0
     monkeypatch.setattr(settings, "yape_directo_fee_rate", 0.0)
-    assert yape_directo_service_fee_extra(50.80) == 0.0
+    assert yape_directo_payment_fee(50.80) == 0.0
 
 
 def test_tarifa_sobre_el_envio_con_tramo_por_productos():

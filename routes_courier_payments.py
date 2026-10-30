@@ -188,9 +188,9 @@ def create_courier_payment_order(
         if amount <= 0:
             raise HTTPException(status_code=400, detail="El pedido no tiene un monto valido para cobrar.")
         # El total ya trae (o no) la comision del medio con que se cotizo. Un
-        # pedido cotizado con Yape propio no lleva comision, asi que se cobra
+        # pedido cotizado con Yape propio lleva la comision de BCP, asi que se cobra
         # por Yape propio aunque se pida otro medio: si no, se abriria un cobro
-        # con tarjeta por un total sin la comision de la tarjeta.
+        # con tarjeta por un total con otra comision distinta a la de la tarjeta.
         quoted_method = supabase.get_quote_payment_method(order.get("quote_id"), token)
         metodo = quoted_method if quoted_method is not None else payload.payment_method
         if yape_propio_aplica(metodo, amount):
