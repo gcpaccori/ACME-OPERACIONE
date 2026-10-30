@@ -361,15 +361,17 @@ def calculate_payment_processing_fee(amount: float, payment_method: str = "card"
     descuente su parte, llegue completo el monto original.
     """
     if yape_propio_aplica(payment_method, int(round(max(0.0, amount) * 100))):
-        # Yape directo al numero de ACME: no hay pasarela que cobre comision. Si
-        # el monto exacto esta ocupado por otro pago en curso, el cliente yapea
-        # hasta S/ 0.09 mas para distinguirlo; eso se cobra en el momento.
+        # Yape directo al numero de ACME: no hay pasarela. Lo que descuenta BCP
+        # va dentro de la tarifa de servicio (ver yape_directo_service_fee_extra),
+        # no en esta linea. Si el monto exacto esta ocupado por otro pago en
+        # curso, el cliente yapea hasta S/ 0.09 mas para distinguirlo.
+        rate = max(0.0, float(settings.yape_directo_fee_rate or 0.0))
         return {
             "fee": 0.0,
             "rate": 0.0,
             "fixed": 0.0,
             "provider": "yape_propio",
-            "note": "Yape directo a ACME: sin comision de pasarela.",
+            "note": f"Yape directo a ACME: el {rate * 100:.1f}% de Yape empresa va en la tarifa de servicio.",
             "tax_amount": 0.0,
         }
     # Yape directo que no aplica (monto grande o pasarela apagada) se cotiza
@@ -411,6 +413,21 @@ def calculate_payment_processing_fee(amount: float, payment_method: str = "card"
     fee = max(round(charged - amount, 2), round(min_fee, 2))
     tax_amount = round(fee - fee / (1 + fee_igv), 2)
     return {"fee": fee, "rate": rate, "fixed": fixed_pen, "provider": provider, "note": note, "tax_amount": tax_amount}
+
+
+def yape_directo_service_fee_extra(amount: float) -> float:
+    """Lo que se suma a la tarifa de servicio al pagar con Yape directo.
+
+    BCP descuenta su comision sobre todo lo que entra, incluido este extra, asi
+    que se calcula para que sea la tasa del total final:
+    extra = monto * tasa / (1 - tasa). Con 3.5%, S/ 50.80 -> S/ 1.84 (total
+    S/ 52.64, y 1.84 es el 3.5% de 52.64).
+    """
+    rate = max(0.0, float(settings.yape_directo_fee_rate or 0.0))
+    base = max(0.0, float(amount or 0.0))
+    if rate <= 0 or rate >= 1 or base <= 0:
+        return 0.0
+    return round(base * rate / (1 - rate), 2)
 
 
 def calculate_included_igv(taxable_total: float) -> dict[str, float]:

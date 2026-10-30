@@ -115,16 +115,20 @@ class Settings(BaseSettings):
     # La comision de la pasarela la paga el cliente en su propia linea
     # ("Comision de pasarela"), calculada segun el medio de pago elegido.
 
-    # Pasarela Yape propia (repo acme-yape): QR + numero de ACME y un celular
-    # que reenvia las notificaciones de Yape. Se usa para los yapeos chicos, en
-    # los que Culqi cobra su comision minima; desde el monto maximo se sigue
-    # cobrando por Culqi o Izipay. Sin URL ni API key queda apagada.
+    # Pasarela Yape propia (repo acme-yape): QR + numero de ACME (Yape empresa
+    # de BCP) y un celular que reenvia las notificaciones de Yape. Sin URL ni
+    # API key queda apagada.
     yape_propio_url: str = os.getenv("YAPE_PROPIO_URL", "")
     yape_propio_api_key: str = os.getenv("YAPE_PROPIO_API_KEY", "")
     # Secreto con el que acme-yape firma el aviso de sesion pagada.
     yape_propio_webhook_secreto: str = os.getenv("YAPE_PROPIO_WEBHOOK_SECRETO", "")
-    # Culqi cobra S/ 3.50 minimo a los yapeos menores de S/ 87.72.
-    yape_propio_max_centimos: int = int(os.getenv("YAPE_PROPIO_MAX_CENTIMOS", "8772"))
+    # Monto maximo por Yape propio; 0 = sin tope. Antes era S/ 87.72, donde
+    # Culqi dejaba de cobrar su minimo de S/ 3.50.
+    yape_propio_max_centimos: int = int(os.getenv("YAPE_PROPIO_MAX_CENTIMOS", "0"))
+    # BCP descuenta ~2.98% de cada yapeo a Yape empresa. El cliente lo paga
+    # dentro de la tarifa de servicio: esta tasa es la parte del total que
+    # yapea el cliente (3.5% = 2.98% + el IGV que lleva la tarifa).
+    yape_directo_fee_rate: float = float(os.getenv("YAPE_DIRECTO_FEE_RATE", "0.035"))
 
     @field_validator("debug", "skip_legacy_db_init", mode="before")
     @classmethod
@@ -174,11 +178,13 @@ METODO_YAPE_DIRECTO = "yape_directo"
 
 
 def yape_propio_aplica(method: str | None, amount_centimos: int) -> bool:
-    """El pago va por la pasarela propia si se eligio Yape directo, esta activa y el monto es chico."""
+    """El pago va por la pasarela propia si se eligio Yape directo, esta activa y el monto no pasa el tope."""
+    tope = int(settings.yape_propio_max_centimos)
     return (
         method == METODO_YAPE_DIRECTO
         and yape_propio_configurado()
-        and 0 < int(amount_centimos) <= int(settings.yape_propio_max_centimos)
+        and 0 < int(amount_centimos)
+        and (tope <= 0 or int(amount_centimos) <= tope)
     )
 
 
