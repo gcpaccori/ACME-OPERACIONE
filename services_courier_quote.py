@@ -380,6 +380,7 @@ def calculate_payment_processing_fee(amount: float, payment_method: str = "card"
     provider = payment_provider_for(method)
     igv = max(0.0, float(settings.igv_rate or 0.0))
     min_fee = 0.0
+    min_fee_below = 0.0
     fee_igv = igv
     if provider in ("izipay", "izipay_sdk"):
         rate = max(0.0, float(settings.izipay_card_rate or 0.0))
@@ -387,8 +388,9 @@ def calculate_payment_processing_fee(amount: float, payment_method: str = "card"
         label = "Izipay" + (" (Yape)" if method == "yape" else " (tarjeta)")
     elif method == "yape":
         rate = max(0.0, float(settings.culqi_yape_rate or 0.0))
-        fixed_pen = 0.0
+        fixed_pen = round(max(0.0, float(settings.culqi_yape_fixed_usd or 0.0)) * max(0.0, float(settings.culqi_exchange_rate or 0.0)), 2)
         min_fee = max(0.0, float(settings.culqi_yape_min_fee_pen or 0.0))
+        min_fee_below = max(0.0, float(settings.culqi_yape_min_fee_below_pen or 0.0))
         if not settings.culqi_yape_apply_igv:
             fee_igv = 0.0
         label = "Culqi (Yape)"
@@ -402,15 +404,26 @@ def calculate_payment_processing_fee(amount: float, payment_method: str = "card"
         note += f" + S/ {fixed_pen:.2f}"
     if fee_igv:
         note += " + IGV"
-    if min_fee:
+    if min_fee and min_fee_below:
+        note += f", minimo S/ {min_fee:.2f} bajo S/ {min_fee_below:.2f}"
+    elif min_fee:
         note += f", minimo S/ {min_fee:.2f} por pago"
     note += "."
 
     if amount <= 0:
         return {"fee": 0.0, "rate": rate, "fixed": fixed_pen, "provider": provider, "note": note, "tax_amount": 0.0}
 
-    charged = (amount + fixed_pen * (1 + fee_igv)) / max(0.0001, 1 - rate * (1 + fee_igv))
-    fee = max(round(charged - amount, 2), round(min_fee, 2))
+    if min_fee and min_fee_below and amount + min_fee < min_fee_below:
+        # Culqi cobra solo su minimo, con el IGV ya incluido, cuando el pago no
+        # llega a ese monto.
+        fee = round(min_fee, 2)
+        tax_amount = round(fee - fee / (1 + fee_igv), 2)
+        return {"fee": fee, "rate": rate, "fixed": fixed_pen, "provider": provider, "note": note, "tax_amount": tax_amount}
+    else:
+        charged = (amount + fixed_pen * (1 + fee_igv)) / max(0.0001, 1 - rate * (1 + fee_igv))
+        fee = round(charged - amount, 2)
+        if not min_fee_below:
+            fee = max(fee, round(min_fee, 2))
     tax_amount = round(fee - fee / (1 + fee_igv), 2)
     return {"fee": fee, "rate": rate, "fixed": fixed_pen, "provider": provider, "note": note, "tax_amount": tax_amount}
 
