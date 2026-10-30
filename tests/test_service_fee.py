@@ -152,8 +152,9 @@ def test_cotizacion_con_dos_locales(monkeypatch):
     assert res.multi_store_surcharge_rate == 0.1
     assert res.multi_store_surcharge == round((res.delivery_fee - res.multi_store_surcharge) * 0.1, 2)
     assert [b.subtotal for b in res.branches] == [20.0, 10.0]
-    # Tarifa: 12% del envio (productos S/ 30, hasta S/ 100).
-    assert res.service_fee == round(res.delivery_fee * 0.12, 2)
+    # Tarifa: 12% de los productos (S/ 30, hasta S/ 100).
+    assert res.service_fee == 3.6
+    assert res.service_fee_base == 30.0
     # IGV encima del envio y la tarifa: el total suma todas las lineas.
     assert res.igv_added is True
     assert res.igv_amount == round((res.delivery_fee + res.service_fee) * 0.18, 2)
@@ -292,7 +293,7 @@ def test_cotizacion_yape_directo_comision_en_la_tarifa_para_el_apk(monkeypatch):
     assert res.payment_processing_fee == 0.0
     # La comision de BCP va dentro de la tarifa y aparte en yape_directo_fee.
     assert res.yape_directo_fee > 0
-    assert round(res.service_fee - res.yape_directo_fee, 2) == round(res.delivery_fee * 0.12, 2)
+    assert round(res.service_fee - res.yape_directo_fee, 2) == round(8 * 0.12, 2)
     assert round(res.yape_directo_fee / res.total, 3) == 0.035
     # La etiqueta "Tarifa de servicio (12%)" no se infla con la comision de BCP.
     assert res.service_fee_rate == 0.12
