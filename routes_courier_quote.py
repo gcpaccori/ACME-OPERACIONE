@@ -241,11 +241,13 @@ def create_courier_quote(
         # 11b. Yape directo: lo que descuenta BCP (Yape empresa) lo paga el
         # cliente dentro de la tarifa de servicio, como % del total que yapea.
         pre_total = round(base + delivery_fee + service_fee + tip_amount, 2)
-        yape_directo_extra = 0.0
-        if yape_propio_aplica(payload.payment_method, int(round(pre_total * 100))):
-            yape_directo_extra = yape_directo_service_fee_extra(pre_total)
+        # Si hay tope, se mira con el extra incluido: es lo que se va a yapear.
+        yape_directo_extra = yape_directo_service_fee_extra(pre_total)
+        if yape_propio_aplica(payload.payment_method, int(round((pre_total + yape_directo_extra) * 100))):
             service_fee = round(service_fee + yape_directo_extra, 2)
             service_fee_rate = effective_service_fee_rate(service_fee_base, service_fee)
+        else:
+            yape_directo_extra = 0.0
 
         # 12. IGV solo sobre el cobro de courier (envio + tarifa de servicio).
         # El IGV de los productos lo emite el local, no ACME.
