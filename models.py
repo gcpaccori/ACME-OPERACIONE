@@ -285,6 +285,8 @@ class CourierQuoteResponse(BaseModel):
     payment_processing_provider: str = "culqi"
     payment_processing_note: Optional[str] = None
     payment_processing_tax_amount: float = 0.0
+    # Parte de service_fee que cubre a BCP al pagar con Yape directo.
+    yape_directo_fee: float = 0.0
     total: float
     distance_km: Optional[float] = None
     coverage_status: str = "unknown"

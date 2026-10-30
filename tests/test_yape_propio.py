@@ -66,9 +66,14 @@ def applied(monkeypatch):
     return calls
 
 
-def test_solo_yape_directo_y_montos_chicos(monkeypatch):
+def test_solo_yape_directo_y_tope_opcional(monkeypatch):
     assert yape_propio_aplica("yape_directo", 8772)
     assert not yape_propio_aplica("yape_directo", 8773)
+    # Con tope 0 (el valor por defecto) Yape directo cobra cualquier monto.
+    monkeypatch.setattr(settings, "yape_propio_max_centimos", 0)
+    assert yape_propio_aplica("yape_directo", 50000)
+    assert not yape_propio_aplica("yape_directo", 0)
+    monkeypatch.setattr(settings, "yape_propio_max_centimos", 8772)
     assert not yape_propio_aplica("card", 500)
     # "yape" es Yape por Culqi: el metodo propio solo se usa si el cliente lo elige.
     assert not yape_propio_aplica("yape", 500)
