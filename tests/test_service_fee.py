@@ -294,5 +294,7 @@ def test_cotizacion_yape_directo_comision_en_la_tarifa_para_el_apk(monkeypatch):
     assert res.yape_directo_fee > 0
     assert round(res.service_fee - res.yape_directo_fee, 2) == round(res.delivery_fee * 0.12, 2)
     assert round(res.yape_directo_fee / res.total, 3) == 0.035
+    # La etiqueta "Tarifa de servicio (12%)" no se infla con la comision de BCP.
+    assert res.service_fee_rate == 0.12
     assert res.total == round(res.subtotal + res.delivery_fee + res.service_fee + res.igv_amount + res.tip_amount, 2)
     assert saved["payment_processing_fee"] == 0.0

@@ -260,8 +260,9 @@ def create_courier_quote(
         yape_directo_fee = 0.0
         if processing.get("provider") == "yape_propio" and payment_processing_fee > 0:
             yape_directo_fee = payment_processing_fee
+            # service_fee_rate queda en la tasa del tramo (12%/8% del envio): las
+            # apps la muestran como "Tarifa de servicio (12%)".
             service_fee = round(service_fee + yape_directo_fee, 2)
-            service_fee_rate = effective_service_fee_rate(delivery_fee, service_fee)
             payment_processing_fee = 0.0
 
         # 14. Guardar cotizacion
