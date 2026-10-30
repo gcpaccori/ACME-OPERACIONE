@@ -10,7 +10,7 @@ from models import CourierGeocodeSearchResult, CourierQuoteBranch, CourierQuoteR
 from services_courier_quote import (
     SupabaseQuoteError,
     SupabaseQuoteService,
-    calculate_included_igv,
+    calculate_added_igv,
     calculate_multi_store_surcharge,
     calculate_payment_processing_fee,
     calculate_road_distance_km,
@@ -239,9 +239,14 @@ def create_courier_quote(
         # 11. Tip
         tip_amount = round(float(payload.tip_amount), 2)
 
+        # 11a. IGV del cobro de ACME (envio + tarifa), sumado encima: el envio
+        # llega completo. El IGV de los productos lo emite el local, no ACME.
+        tax_breakdown = calculate_added_igv(round(service_fee + delivery_fee, 2))
+        igv_amount = float(tax_breakdown["igv_amount"])
+
         # 11b. Yape directo: lo que descuenta BCP (Yape empresa) lo paga el
         # cliente dentro de la tarifa de servicio, como % del total que yapea.
-        pre_total = round(base + delivery_fee + service_fee + tip_amount, 2)
+        pre_total = round(base + delivery_fee + service_fee + igv_amount + tip_amount, 2)
         # Si hay tope, se mira con el extra incluido: es lo que se va a yapear.
         yape_directo_extra = yape_directo_service_fee_extra(pre_total)
         if yape_propio_aplica(payload.payment_method, int(round((pre_total + yape_directo_extra) * 100))):
@@ -250,13 +255,8 @@ def create_courier_quote(
         else:
             yape_directo_extra = 0.0
 
-        # 12. IGV solo sobre el cobro de courier (envio + tarifa de servicio).
-        # El IGV de los productos lo emite el local, no ACME.
-        taxable_total = round(service_fee + delivery_fee, 2)
-        tax_breakdown = calculate_included_igv(taxable_total)
-
         # 13. Comision de la pasarela del medio de pago elegido, en su linea.
-        payment_base = round(base + taxable_total + tip_amount, 2)
+        payment_base = round(base + delivery_fee + service_fee + igv_amount + tip_amount, 2)
         try:
             processing = calculate_payment_processing_fee(payment_base, payload.payment_method)
         except ValueError as exc:
@@ -311,6 +311,7 @@ def create_courier_quote(
             taxable_base=float(tax_breakdown["taxable_base"]),
             igv_rate=float(tax_breakdown["igv_rate"]),
             igv_amount=float(tax_breakdown["igv_amount"]),
+            igv_added=True,
             payment_processing_fee=payment_processing_fee,
             payment_processing_rate=float(processing["rate"]),
             payment_processing_fixed=float(processing["fixed"]),

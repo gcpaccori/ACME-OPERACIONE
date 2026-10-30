@@ -441,6 +441,13 @@ def calculate_included_igv(taxable_total: float) -> dict[str, float]:
     return {"taxable_base": taxable_base, "igv_amount": igv_amount, "igv_rate": rate}
 
 
+def calculate_added_igv(taxable_base: float) -> dict[str, float]:
+    """IGV sumado encima de una base sin impuesto (envio S/ 7 -> S/ 1.26)."""
+    rate = max(0.0, float(settings.igv_rate or 0.0))
+    amount = max(0.0, float(taxable_base or 0.0))
+    return {"taxable_base": round(amount, 2), "igv_amount": round(amount * rate, 2), "igv_rate": rate}
+
+
 def _extract_address_parts(data: dict[str, Any]) -> dict[str, str | None]:
     address = data.get("address") or {}
     road = (
