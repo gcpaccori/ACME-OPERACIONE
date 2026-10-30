@@ -414,9 +414,11 @@ def calculate_payment_processing_fee(amount: float, payment_method: str = "card"
         return {"fee": 0.0, "rate": rate, "fixed": fixed_pen, "provider": provider, "note": note, "tax_amount": 0.0}
 
     if min_fee and min_fee_below and amount + min_fee < min_fee_below:
-        # Culqi cobra solo su minimo, sin IGV, cuando el pago no llega a ese monto.
+        # Culqi cobra solo su minimo, con el IGV ya incluido, cuando el pago no
+        # llega a ese monto.
         fee = round(min_fee, 2)
-        return {"fee": fee, "rate": rate, "fixed": fixed_pen, "provider": provider, "note": note, "tax_amount": 0.0}
+        tax_amount = round(fee - fee / (1 + fee_igv), 2)
+        return {"fee": fee, "rate": rate, "fixed": fixed_pen, "provider": provider, "note": note, "tax_amount": tax_amount}
     else:
         charged = (amount + fixed_pen * (1 + fee_igv)) / max(0.0001, 1 - rate * (1 + fee_igv))
         fee = round(charged - amount, 2)

@@ -72,7 +72,7 @@ class Settings(BaseSettings):
     izipay_card_fixed_pen: float = float(os.getenv("IZIPAY_CARD_FIXED_PEN", "0.69"))
     # Yape cobrado por Culqi, segun culqi.com/tarifas: 3.44% + $ 0.20 (al tipo
     # de cambio culqi_exchange_rate), comision minima de S/ 3.50 para montos
-    # menores a S/ 87.72. Ese minimo va sin IGV; desde S/ 87.72 Culqi si suma
+    # menores a S/ 87.72, con su IGV ya incluido; desde S/ 87.72 Culqi suma
     # IGV a su 3.44% + $ 0.20 (lo confirma la liquidacion del negocio).
     culqi_yape_rate: float = float(os.getenv("CULQI_YAPE_RATE", "0.0344"))
     culqi_yape_fixed_usd: float = float(os.getenv("CULQI_YAPE_FIXED_USD", "0.20"))
