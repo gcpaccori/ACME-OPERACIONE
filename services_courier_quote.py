@@ -373,7 +373,7 @@ def calculate_payment_processing_fee(amount: float, payment_method: str = "card"
             "rate": rate,
             "fixed": 0.0,
             "provider": "yape_propio",
-            "note": f"Yape empresa (BCP): {rate * 100:.1f}% del total.",
+            "note": f"BCP (Yape empresa) y pasarela Accuracy Nexus: {rate * 100:.1f}% del total.",
             "tax_amount": 0.0,
         }
     # Yape directo que no aplica (monto grande o pasarela apagada) se cotiza
