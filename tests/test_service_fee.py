@@ -257,3 +257,42 @@ def test_igv_se_suma_encima():
 
     # Envio S/ 7 + tarifa S/ 0.84 -> IGV S/ 1.41; la moto recibe los S/ 7 completos.
     assert calculate_added_igv(7.84) == {"taxable_base": 7.84, "igv_amount": 1.41, "igv_rate": 0.18}
+
+
+def test_cotizacion_yape_directo_comision_en_la_tarifa_para_el_apk(monkeypatch):
+    import routes_courier_quote as rq
+    from models import CourierQuoteRequest, QuoteItemInput
+
+    monkeypatch.setattr(settings, "yape_propio_url", "https://yape.test")
+    monkeypatch.setattr(settings, "yape_propio_api_key", "k")
+    monkeypatch.setattr(settings, "yape_propio_webhook_secreto", "s")
+    monkeypatch.setattr(settings, "yape_propio_max_centimos", 0)
+    monkeypatch.setattr(settings, "yape_directo_fee_rate", 0.035)
+    monkeypatch.setattr(rq, "verify_supabase_user", lambda token: "cliente")
+    monkeypatch.setattr(rq, "calculate_road_distance_km", lambda *a: 2.0)
+    svc = rq.SupabaseQuoteService
+    monkeypatch.setattr(svc, "__init__", lambda self: None)
+    monkeypatch.setattr(svc, "get_branch", lambda self, bid, token=None: {"id": bid, "merchant_id": "m", "lat": -12.78, "lng": -74.97})
+    monkeypatch.setattr(svc, "get_delivery_zone_overrides", lambda self, bid, token=None: {})
+    monkeypatch.setattr(svc, "get_products_with_prices", lambda self, ids, token=None: [
+        {"id": "p1", "base_price": 8, "name": "Torta", "merchant_id": "m"},
+    ])
+    saved = {}
+    monkeypatch.setattr(svc, "save_quote", lambda self, **kw: saved.update(kw) or {"id": "q1", "expires_at": "x"})
+
+    res = rq.create_courier_quote(
+        CourierQuoteRequest(
+            branch_id="b1", latitude=-12.79, longitude=-74.98,
+            items=[QuoteItemInput(product_id="p1", quantity=1)], payment_method="yape_directo",
+        ),
+        authorization="Bearer t",
+    )
+    # El APK solo ofrece Yape directo con la comision de pago en cero.
+    assert res.payment_processing_provider == "yape_propio"
+    assert res.payment_processing_fee == 0.0
+    # La comision de BCP va dentro de la tarifa y aparte en yape_directo_fee.
+    assert res.yape_directo_fee > 0
+    assert round(res.service_fee - res.yape_directo_fee, 2) == round(res.delivery_fee * 0.12, 2)
+    assert round(res.yape_directo_fee / res.total, 3) == 0.035
+    assert res.total == round(res.subtotal + res.delivery_fee + res.service_fee + res.igv_amount + res.tip_amount, 2)
+    assert saved["payment_processing_fee"] == 0.0
