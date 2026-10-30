@@ -146,7 +146,8 @@ def test_cotizacion_con_dos_locales(monkeypatch):
     assert res.multi_store_surcharge_rate == 0.1
     assert res.multi_store_surcharge == round((res.delivery_fee - res.multi_store_surcharge) * 0.1, 2)
     assert [b.subtotal for b in res.branches] == [20.0, 10.0]
-    assert res.service_fee == 3.6
+    # Tarifa: 12% del envio (productos S/ 30, hasta S/ 100).
+    assert res.service_fee == round(res.delivery_fee * 0.12, 2)
     assert {i["branch_id"] for i in saved["items_snapshot"]} == {"b1", "b2"}
 
 
@@ -229,3 +230,11 @@ def test_extra_de_yape_directo_es_el_porcentaje_del_total(monkeypatch):
     assert yape_directo_service_fee_extra(0) == 0.0
     monkeypatch.setattr(settings, "yape_directo_fee_rate", 0.0)
     assert yape_directo_service_fee_extra(50.80) == 0.0
+
+
+def test_tarifa_sobre_el_envio_con_tramo_por_productos():
+    # Productos S/ 72 (hasta S/ 100) -> 12% del envio de S/ 7.
+    assert calculate_service_fee(7.0, 72.0) == 0.84
+    # Productos S/ 150 (mas de S/ 100) -> 8% del envio de S/ 7.50.
+    assert calculate_service_fee(7.5, 150.0) == 0.6
+    assert calculate_service_fee(5.0, 100.0) == 0.6

@@ -231,9 +231,10 @@ def create_courier_quote(
         base = subtotal - discount
         service_fee_base = service_fee_base_amount(base, service_fee_exempt_subtotal)
 
-        # 10. Tarifa ACME: 12% hasta S/ 100; mas de S/ 100, 8% sobre todo
-        service_fee = calculate_service_fee(service_fee_base)
-        service_fee_rate = effective_service_fee_rate(service_fee_base, service_fee)
+        # 10. Tarifa ACME sobre el envio: 12% si los productos suman hasta
+        # S/ 100; si pasan de S/ 100, 8%.
+        service_fee = calculate_service_fee(delivery_fee, service_fee_base)
+        service_fee_rate = effective_service_fee_rate(delivery_fee, service_fee)
 
         # 11. Tip
         tip_amount = round(float(payload.tip_amount), 2)
@@ -245,7 +246,7 @@ def create_courier_quote(
         yape_directo_extra = yape_directo_service_fee_extra(pre_total)
         if yape_propio_aplica(payload.payment_method, int(round((pre_total + yape_directo_extra) * 100))):
             service_fee = round(service_fee + yape_directo_extra, 2)
-            service_fee_rate = effective_service_fee_rate(service_fee_base, service_fee)
+            service_fee_rate = effective_service_fee_rate(delivery_fee, service_fee)
         else:
             yape_directo_extra = 0.0
 
