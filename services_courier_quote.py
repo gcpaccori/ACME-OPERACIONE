@@ -360,18 +360,20 @@ def calculate_payment_processing_fee(amount: float, payment_method: str = "card"
     en USD. La comision se sube de forma que, despues de que la pasarela
     descuente su parte, llegue completo el monto original.
     """
-    if yape_propio_aplica(payment_method, int(round(max(0.0, amount) * 100))):
-        # Yape directo al numero de ACME: no hay pasarela. Lo que descuenta BCP
-        # va dentro de la tarifa de servicio (ver yape_directo_service_fee_extra),
-        # no en esta linea. Si el monto exacto esta ocupado por otro pago en
-        # curso, el cliente yapea hasta S/ 0.09 mas para distinguirlo.
+    yape_directo_fee = yape_directo_payment_fee(amount)
+    if yape_propio_aplica(payment_method, int(round((max(0.0, amount) + yape_directo_fee) * 100))):
+        # Yape directo al numero de ACME (Yape empresa de BCP): la comision que
+        # descuenta BCP va en esta linea, como las otras pasarelas, a la tasa
+        # yape_directo_fee_rate del total que yapea el cliente. Si el monto
+        # exacto esta ocupado por otro pago en curso, el cliente yapea hasta
+        # S/ 0.09 mas para distinguirlo.
         rate = max(0.0, float(settings.yape_directo_fee_rate or 0.0))
         return {
-            "fee": 0.0,
-            "rate": 0.0,
+            "fee": yape_directo_fee,
+            "rate": rate,
             "fixed": 0.0,
             "provider": "yape_propio",
-            "note": f"Yape directo a ACME: el {rate * 100:.1f}% de Yape empresa va en la tarifa de servicio.",
+            "note": f"Yape empresa (BCP): {rate * 100:.1f}% del total.",
             "tax_amount": 0.0,
         }
     # Yape directo que no aplica (monto grande o pasarela apagada) se cotiza
@@ -428,11 +430,11 @@ def calculate_payment_processing_fee(amount: float, payment_method: str = "card"
     return {"fee": fee, "rate": rate, "fixed": fixed_pen, "provider": provider, "note": note, "tax_amount": tax_amount}
 
 
-def yape_directo_service_fee_extra(amount: float) -> float:
-    """Lo que se suma a la tarifa de servicio al pagar con Yape directo.
+def yape_directo_payment_fee(amount: float) -> float:
+    """Comision de pago de Yape directo (lo que descuenta BCP, Yape empresa).
 
-    BCP descuenta su comision sobre todo lo que entra, incluido este extra, asi
-    que se calcula para que sea la tasa del total final:
+    BCP descuenta su comision sobre todo lo que entra, incluida esta comision,
+    asi que se calcula para que sea la tasa del total final:
     extra = monto * tasa / (1 - tasa). Con 3.5%, S/ 50.80 -> S/ 1.84 (total
     S/ 52.64, y 1.84 es el 3.5% de 52.64).
     """

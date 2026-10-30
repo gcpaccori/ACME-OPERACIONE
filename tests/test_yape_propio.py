@@ -85,9 +85,11 @@ def test_solo_yape_directo_y_tope_opcional(monkeypatch):
     assert not yape_propio_aplica("yape_directo", 500)
 
 
-def test_cotizacion_sin_comision_hasta_el_limite():
+def test_cotizacion_con_comision_de_bcp_hasta_el_limite():
+    # La comision de BCP va en su linea: 3.5% del total que se yapea.
     chico = calculate_payment_processing_fee(25.50, "yape_directo")
-    assert chico["fee"] == 0.0 and chico["provider"] == "yape_propio"
+    assert chico["fee"] == 0.92 and chico["provider"] == "yape_propio"
+    assert round(chico["fee"] / (25.50 + chico["fee"]), 3) == 0.035
     grande = calculate_payment_processing_fee(150.0, "yape_directo")
     assert grande["provider"] != "yape_propio" and grande["fee"] > 0
     assert calculate_payment_processing_fee(25.50, "yape")["provider"] != "yape_propio"

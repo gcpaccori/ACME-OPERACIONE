@@ -5,7 +5,7 @@ from typing import Any
 
 from fastapi import APIRouter, Header, HTTPException, Query
 
-from config import settings, yape_propio_aplica
+from config import settings
 from models import CourierGeocodeSearchResult, CourierQuoteBranch, CourierQuoteRequest, CourierQuoteResponse, CourierReverseGeocodeResponse
 from services_courier_quote import (
     SupabaseQuoteError,
@@ -19,7 +19,6 @@ from services_courier_quote import (
     is_service_fee_exempt_category,
     service_fee_base_amount,
     reverse_geocode_point,
-    yape_directo_service_fee_extra,
     search_geocode_address,
 )
 from services_courier_tariffs import calculate_courier_tariff, detect_huancavelica_coverage
@@ -244,17 +243,6 @@ def create_courier_quote(
         tax_breakdown = calculate_added_igv(round(service_fee + delivery_fee, 2))
         igv_amount = float(tax_breakdown["igv_amount"])
 
-        # 11b. Yape directo: lo que descuenta BCP (Yape empresa) lo paga el
-        # cliente dentro de la tarifa de servicio, como % del total que yapea.
-        pre_total = round(base + delivery_fee + service_fee + igv_amount + tip_amount, 2)
-        # Si hay tope, se mira con el extra incluido: es lo que se va a yapear.
-        yape_directo_extra = yape_directo_service_fee_extra(pre_total)
-        if yape_propio_aplica(payload.payment_method, int(round((pre_total + yape_directo_extra) * 100))):
-            service_fee = round(service_fee + yape_directo_extra, 2)
-            service_fee_rate = effective_service_fee_rate(delivery_fee, service_fee)
-        else:
-            yape_directo_extra = 0.0
-
         # 13. Comision de la pasarela del medio de pago elegido, en su linea.
         payment_base = round(base + delivery_fee + service_fee + igv_amount + tip_amount, 2)
         try:
@@ -263,8 +251,6 @@ def create_courier_quote(
             raise HTTPException(status_code=400, detail=str(exc))
         payment_processing_fee = float(processing["fee"])
         payment_processing_note = str(processing["note"])
-        if yape_directo_extra:
-            payment_processing_note += f" Incluido: S/ {yape_directo_extra:.2f}."
         total = round(payment_base + payment_processing_fee, 2)
 
         # 14. Guardar cotizacion
@@ -318,7 +304,6 @@ def create_courier_quote(
             payment_processing_provider=str(processing["provider"]),
             payment_processing_note=payment_processing_note,
             payment_processing_tax_amount=float(processing["tax_amount"]),
-            yape_directo_fee=yape_directo_extra,
             total=total,
             distance_km=distance_km,
             coverage_status=str(coverage.get("status") or "unknown"),
