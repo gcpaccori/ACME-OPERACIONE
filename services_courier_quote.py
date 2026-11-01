@@ -214,6 +214,8 @@ class SupabaseQuoteService:
         payment_processing_provider: str = "culqi",
         payment_processing_note: str | None = None,
         payment_processing_tax_amount: float = 0.0,
+        pricing_version: int | None = None,
+        pricing_breakdown: dict[str, Any] | None = None,
         bearer_token: str | None = None,
     ) -> dict[str, Any]:
         now = datetime.now(timezone.utc)
@@ -238,6 +240,9 @@ class SupabaseQuoteService:
             "payment_processing_provider": payment_processing_provider,
             "payment_processing_note": payment_processing_note,
             "payment_processing_tax_amount": payment_processing_tax_amount,
+            # Con que version de Cobros y como se repartio: para cuadrar despues.
+            "pricing_version": pricing_version,
+            "pricing_breakdown": pricing_breakdown,
             "total": total,
             "distance_km": distance_km,
             "payment_method": payment_method,
@@ -267,6 +272,8 @@ class SupabaseQuoteService:
                 "payment_processing_provider",
                 "payment_processing_note",
                 "payment_processing_tax_amount",
+                "pricing_version",
+                "pricing_breakdown",
             }
             if "schema cache" not in detail and "column" not in detail:
                 raise

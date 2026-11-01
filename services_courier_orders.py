@@ -230,6 +230,9 @@ class SupabaseOrderService:
             "total": anchor_total,
             "currency": "PEN",
             "quote_id": quote.get("id"),
+            # Solo el pedido principal (el que lleva el total) guarda el desglose.
+            "pricing_version": quote.get("pricing_version"),
+            "pricing_breakdown": quote.get("pricing_breakdown"),
             "fulfillment_type": fulfillment_type,
             "special_instructions": delivery_data.get("special_instructions"),
             "placed_at": now,
@@ -251,6 +254,8 @@ class SupabaseOrderService:
             "payment_processing_provider",
             "payment_processing_note",
             "payment_processing_tax_amount",
+            "pricing_version",
+            "pricing_breakdown",
         }
         def insert_order(payload: dict[str, Any]) -> Any:
             try:
