@@ -1158,7 +1158,7 @@
   ],
   "sector_pricing": {
     "enabled": true,
-    "source": "Precios que dio el dueño en el chat del 22/10/2026 al recorrer la ciudad; el centro cobra 7 (\"de ahí hacia el centro 7\")",
+    "source": "Precios que dio el dueño en el chat del 22/10/2026 al recorrer la ciudad; el centro cobra 7 (\"de ahí hacia el centro 7\"). Actualizado con el KML del dueño del 01/11/2026 (puntos azules S/ 6, naranjas S/ 7).",
     "rule": "El destino paga el precio del punto de referencia mas cercano. Si el local esta fuera del centro, se cobra el mayor entre el precio del local y el del destino.",
     "center_fee": 7,
     "points": [
@@ -1619,13 +1619,6 @@
       },
       {
         "lat": -12.78881,
-        "lng": -74.980618,
-        "fee": 7,
-        "sector": "Centro",
-        "source": "centro (dueño: \"hacia el centro 7\")"
-      },
-      {
-        "lat": -12.78881,
         "lng": -74.978776,
         "fee": 7,
         "sector": "Centro",
@@ -1655,13 +1648,6 @@
       {
         "lat": -12.78881,
         "lng": -74.971407,
-        "fee": 7,
-        "sector": "Centro",
-        "source": "centro (dueño: \"hacia el centro 7\")"
-      },
-      {
-        "lat": -12.78881,
-        "lng": -74.969565,
         "fee": 7,
         "sector": "Centro",
         "source": "centro (dueño: \"hacia el centro 7\")"
@@ -1907,20 +1893,6 @@
       {
         "lat": -12.783383,
         "lng": -74.964038,
-        "fee": 7,
-        "sector": "Centro",
-        "source": "centro (dueño: \"hacia el centro 7\")"
-      },
-      {
-        "lat": -12.783383,
-        "lng": -74.962196,
-        "fee": 7,
-        "sector": "Centro",
-        "source": "centro (dueño: \"hacia el centro 7\")"
-      },
-      {
-        "lat": -12.783383,
-        "lng": -74.960353,
         "fee": 7,
         "sector": "Centro",
         "source": "centro (dueño: \"hacia el centro 7\")"
@@ -2085,6 +2057,440 @@
         "fee": 7,
         "sector": "Centro",
         "source": "centro (dueño: \"hacia el centro 7\")"
+      },
+      {
+        "lat": -12.782084,
+        "lng": -74.9812982,
+        "fee": 6,
+        "sector": "Centro",
+        "source": "KML del dueño 01/11/2026"
+      },
+      {
+        "lat": -12.7835728,
+        "lng": -74.9818402,
+        "fee": 6,
+        "sector": "Centro",
+        "source": "KML del dueño 01/11/2026"
+      },
+      {
+        "lat": -12.7853384,
+        "lng": -74.9826985,
+        "fee": 6,
+        "sector": "Centro",
+        "source": "KML del dueño 01/11/2026"
+      },
+      {
+        "lat": -12.7864951,
+        "lng": -74.9832014,
+        "fee": 6,
+        "sector": "Centro",
+        "source": "KML del dueño 01/11/2026"
+      },
+      {
+        "lat": -12.7877376,
+        "lng": -74.9836305,
+        "fee": 6,
+        "sector": "Centro",
+        "source": "KML del dueño 01/11/2026"
+      },
+      {
+        "lat": -12.7888179,
+        "lng": -74.9802885,
+        "fee": 6,
+        "sector": "Centro",
+        "source": "KML del dueño 01/11/2026"
+      },
+      {
+        "lat": -12.7888048,
+        "lng": -74.9779013,
+        "fee": 6,
+        "sector": "Centro",
+        "source": "KML del dueño 01/11/2026"
+      },
+      {
+        "lat": -12.7891317,
+        "lng": -74.9766139,
+        "fee": 6,
+        "sector": "Centro",
+        "source": "KML del dueño 01/11/2026"
+      },
+      {
+        "lat": -12.7899426,
+        "lng": -74.9790681,
+        "fee": 6,
+        "sector": "Centro",
+        "source": "KML del dueño 01/11/2026"
+      },
+      {
+        "lat": -12.7898772,
+        "lng": -74.9795643,
+        "fee": 6,
+        "sector": "Centro",
+        "source": "KML del dueño 01/11/2026"
+      },
+      {
+        "lat": -12.7900437,
+        "lng": -74.9756103,
+        "fee": 6,
+        "sector": "Centro",
+        "source": "KML del dueño 01/11/2026"
+      },
+      {
+        "lat": -12.7900437,
+        "lng": -74.9731427,
+        "fee": 6,
+        "sector": "Centro",
+        "source": "KML del dueño 01/11/2026"
+      },
+      {
+        "lat": -12.7898606,
+        "lng": -74.9718954,
+        "fee": 6,
+        "sector": "Centro",
+        "source": "KML del dueño 01/11/2026"
+      },
+      {
+        "lat": -12.7894343,
+        "lng": -74.9706616,
+        "fee": 6,
+        "sector": "Centro",
+        "source": "KML del dueño 01/11/2026"
+      },
+      {
+        "lat": -12.789051,
+        "lng": -74.9699739,
+        "fee": 7,
+        "sector": "Centro",
+        "source": "KML del dueño 01/11/2026"
+      },
+      {
+        "lat": -12.7899469,
+        "lng": -74.9697559,
+        "fee": 7,
+        "sector": "Centro",
+        "source": "KML del dueño 01/11/2026"
+      },
+      {
+        "lat": -12.7883872,
+        "lng": -74.9683416,
+        "fee": 7,
+        "sector": "Centro",
+        "source": "KML del dueño 01/11/2026"
+      },
+      {
+        "lat": -12.7896271,
+        "lng": -74.9677984,
+        "fee": 7,
+        "sector": "Centro",
+        "source": "KML del dueño 01/11/2026"
+      },
+      {
+        "lat": -12.7889705,
+        "lng": -74.9703841,
+        "fee": 6,
+        "sector": "Centro",
+        "source": "KML del dueño 01/11/2026"
+      },
+      {
+        "lat": -12.7886239,
+        "lng": -74.9695593,
+        "fee": 6,
+        "sector": "Centro",
+        "source": "KML del dueño 01/11/2026"
+      },
+      {
+        "lat": -12.7882512,
+        "lng": -74.968701,
+        "fee": 6,
+        "sector": "Centro",
+        "source": "KML del dueño 01/11/2026"
+      },
+      {
+        "lat": -12.7881152,
+        "lng": -74.9681538,
+        "fee": 6,
+        "sector": "Centro",
+        "source": "KML del dueño 01/11/2026"
+      },
+      {
+        "lat": -12.7877948,
+        "lng": -74.9675999,
+        "fee": 6,
+        "sector": "Centro",
+        "source": "KML del dueño 01/11/2026"
+      },
+      {
+        "lat": -12.7879256,
+        "lng": -74.9667148,
+        "fee": 6,
+        "sector": "Centro",
+        "source": "KML del dueño 01/11/2026"
+      },
+      {
+        "lat": -12.7871539,
+        "lng": -74.9671037,
+        "fee": 6,
+        "sector": "Centro",
+        "source": "KML del dueño 01/11/2026"
+      },
+      {
+        "lat": -12.7877562,
+        "lng": -74.9667899,
+        "fee": 7,
+        "sector": "Centro",
+        "source": "KML del dueño 01/11/2026"
+      },
+      {
+        "lat": -12.7870728,
+        "lng": -74.9670414,
+        "fee": 7,
+        "sector": "Centro",
+        "source": "KML del dueño 01/11/2026"
+      },
+      {
+        "lat": -12.7874804,
+        "lng": -74.9655248,
+        "fee": 7,
+        "sector": "Centro",
+        "source": "KML del dueño 01/11/2026"
+      },
+      {
+        "lat": -12.78784,
+        "lng": -74.9643849,
+        "fee": 7,
+        "sector": "Centro",
+        "source": "KML del dueño 01/11/2026"
+      },
+      {
+        "lat": -12.7863926,
+        "lng": -74.9632932,
+        "fee": 7,
+        "sector": "Centro",
+        "source": "KML del dueño 01/11/2026"
+      },
+      {
+        "lat": -12.785587,
+        "lng": -74.9640107,
+        "fee": 7,
+        "sector": "Centro",
+        "source": "KML del dueño 01/11/2026"
+      },
+      {
+        "lat": -12.7849747,
+        "lng": -74.9577722,
+        "fee": 7,
+        "sector": "Centro",
+        "source": "KML del dueño 01/11/2026"
+      },
+      {
+        "lat": -12.7857463,
+        "lng": -74.9576045,
+        "fee": 7,
+        "sector": "Centro",
+        "source": "KML del dueño 01/11/2026"
+      },
+      {
+        "lat": -12.7853605,
+        "lng": -74.959938,
+        "fee": 7,
+        "sector": "Centro",
+        "source": "KML del dueño 01/11/2026"
+      },
+      {
+        "lat": -12.7851774,
+        "lng": -74.9612322,
+        "fee": 7,
+        "sector": "Centro",
+        "source": "KML del dueño 01/11/2026"
+      },
+      {
+        "lat": -12.7844646,
+        "lng": -74.9605751,
+        "fee": 7,
+        "sector": "Centro",
+        "source": "KML del dueño 01/11/2026"
+      },
+      {
+        "lat": -12.7822691,
+        "lng": -74.9622412,
+        "fee": 6,
+        "sector": "Centro",
+        "source": "KML del dueño 01/11/2026"
+      },
+      {
+        "lat": -12.7831083,
+        "lng": -74.9622881,
+        "fee": 6,
+        "sector": "Centro",
+        "source": "KML del dueño 01/11/2026"
+      },
+      {
+        "lat": -12.7843416,
+        "lng": -74.9619529,
+        "fee": 6,
+        "sector": "Centro",
+        "source": "KML del dueño 01/11/2026"
+      },
+      {
+        "lat": -12.7845443,
+        "lng": -74.9619931,
+        "fee": 7,
+        "sector": "Centro",
+        "source": "KML del dueño 01/11/2026"
+      },
+      {
+        "lat": -12.7842653,
+        "lng": -74.9612928,
+        "fee": 6,
+        "sector": "Centro",
+        "source": "KML del dueño 01/11/2026"
+      },
+      {
+        "lat": -12.7823716,
+        "lng": -74.9617853,
+        "fee": 7,
+        "sector": "Centro",
+        "source": "KML del dueño 01/11/2026"
+      },
+      {
+        "lat": -12.7835233,
+        "lng": -74.9602224,
+        "fee": 6,
+        "sector": "Centro",
+        "source": "KML del dueño 01/11/2026"
+      },
+      {
+        "lat": -12.7843354,
+        "lng": -74.9636556,
+        "fee": 6,
+        "sector": "Centro",
+        "source": "KML del dueño 01/11/2026"
+      },
+      {
+        "lat": -12.7823606,
+        "lng": -74.9637012,
+        "fee": 6,
+        "sector": "Centro",
+        "source": "KML del dueño 01/11/2026"
+      },
+      {
+        "lat": -12.7810854,
+        "lng": -74.9628563,
+        "fee": 6,
+        "sector": "Centro",
+        "source": "KML del dueño 01/11/2026"
+      },
+      {
+        "lat": -12.7805816,
+        "lng": -74.9643523,
+        "fee": 6,
+        "sector": "Centro",
+        "source": "KML del dueño 01/11/2026"
+      },
+      {
+        "lat": -12.7808517,
+        "lng": -74.9642986,
+        "fee": 6,
+        "sector": "Centro",
+        "source": "KML del dueño 01/11/2026"
+      },
+      {
+        "lat": -12.7797805,
+        "lng": -74.9646031,
+        "fee": 6,
+        "sector": "Centro",
+        "source": "KML del dueño 01/11/2026"
+      },
+      {
+        "lat": -12.7788925,
+        "lng": -74.9648458,
+        "fee": 6,
+        "sector": "Centro",
+        "source": "KML del dueño 01/11/2026"
+      },
+      {
+        "lat": -12.7785459,
+        "lng": -74.9655432,
+        "fee": 6,
+        "sector": "Centro",
+        "source": "KML del dueño 01/11/2026"
+      },
+      {
+        "lat": -12.7789083,
+        "lng": -74.9665276,
+        "fee": 6,
+        "sector": "Centro",
+        "source": "KML del dueño 01/11/2026"
+      },
+      {
+        "lat": -12.7785055,
+        "lng": -74.9679841,
+        "fee": 6,
+        "sector": "Centro",
+        "source": "KML del dueño 01/11/2026"
+      },
+      {
+        "lat": -12.7784976,
+        "lng": -74.9703667,
+        "fee": 6,
+        "sector": "Centro",
+        "source": "KML del dueño 01/11/2026"
+      },
+      {
+        "lat": -12.7795481,
+        "lng": -74.971965,
+        "fee": 6,
+        "sector": "Centro",
+        "source": "KML del dueño 01/11/2026"
+      },
+      {
+        "lat": -12.7815575,
+        "lng": -74.9743361,
+        "fee": 6,
+        "sector": "Centro",
+        "source": "KML del dueño 01/11/2026"
+      },
+      {
+        "lat": -12.7823683,
+        "lng": -74.978067,
+        "fee": 6,
+        "sector": "Centro",
+        "source": "KML del dueño 01/11/2026"
+      },
+      {
+        "lat": -12.7814199,
+        "lng": -74.9809605,
+        "fee": 6,
+        "sector": "Centro",
+        "source": "KML del dueño 01/11/2026"
+      },
+      {
+        "lat": -12.7813885,
+        "lng": -74.979606,
+        "fee": 6,
+        "sector": "Centro",
+        "source": "KML del dueño 01/11/2026"
+      },
+      {
+        "lat": -12.7820424,
+        "lng": -74.9763069,
+        "fee": 6,
+        "sector": "Centro",
+        "source": "KML del dueño 01/11/2026"
+      },
+      {
+        "lat": -12.7805933,
+        "lng": -74.9730614,
+        "fee": 6,
+        "sector": "Centro",
+        "source": "KML del dueño 01/11/2026"
+      },
+      {
+        "lat": -12.7883072,
+        "lng": -74.9819518,
+        "fee": 6,
+        "sector": "Centro",
+        "source": "KML del dueño 01/11/2026"
       }
     ]
   }
