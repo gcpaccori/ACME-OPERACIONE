@@ -160,6 +160,8 @@ def test_validacion_con_mensajes_claros():
     with pytest.raises(PricingConfigError):
         validate_config(merge_config({"igv": {"mode": "raro"}}))
     with pytest.raises(PricingConfigError):
+        validate_config(merge_config({"multi_store": {"rates": [0.1, 0.1, 0.1, 0.1, 0.1]}}))
+    with pytest.raises(PricingConfigError):
         validate_config(merge_config({"service_fee": {"tiers": [{"up_to": 100, "rate": 0.1}, {"up_to": 50, "rate": 0.1}, {"up_to": None, "rate": 0}]}}))
 
 

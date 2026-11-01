@@ -46,6 +46,8 @@ IGV_MODES = ("added", "included", "none")
 GATEWAY_MODES = ("cost", "percent", "absorb")
 GATEWAYS = ("yape_directo", "izipay", "culqi_yape", "culqi_card")
 ROUNDING_MODES = ("nearest", "up", "down")
+# Igual que MAX_CART_BRANCHES de la web (PublicStoreContext.tsx).
+MAX_STORES = 5
 
 
 class PricingConfigError(ValueError):
@@ -419,6 +421,9 @@ def validate_config(cfg: dict[str, Any]) -> dict[str, Any]:
 
     ms = c["multi_store"]
     ms["rates"] = [_num(r, "Recargo por local extra", hi=5.0) for r in (ms.get("rates") or [])]
+    if len(ms["rates"]) + 1 > MAX_STORES:
+        # La web y la app solo dejan juntar hasta 5 locales en un carrito.
+        raise PricingConfigError(f"Un pedido puede juntar hasta {MAX_STORES} locales: deja como maximo {MAX_STORES - 1} recargos.")
     ms["max_amount"] = _num(ms.get("max_amount", 0), "Tope del recargo por locales")
     ms["group"] = _choice(ms.get("group"), GROUPS, "Grupo del recargo por locales")
 
