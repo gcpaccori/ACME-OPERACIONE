@@ -646,12 +646,10 @@ def calculate_multi_store_surcharge(base_delivery_fee: float, branch_count: int)
     Cada local extra suma su porcentaje del envio base (10%, 15%, 20%, 25%).
     Lanza ValueError si el pedido trae mas locales de los permitidos.
     """
-    extra = max(0, int(branch_count) - 1)
-    rates = multi_store_surcharge_rates()
-    if extra > len(rates):
-        raise ValueError(f"Un pedido puede juntar hasta {len(rates) + 1} locales.")
-    rate = round(sum(rates[:extra]), 4)
-    return round(max(0.0, float(base_delivery_fee)) * rate, 2), rate
+    from services_pricing import load_pricing_config, multi_store_surcharge
+
+    # Los porcentajes y el tope salen de la configuracion de cobros del admin.
+    return multi_store_surcharge(load_pricing_config(), base_delivery_fee, branch_count)
 
 
 def effective_service_fee_rate(base_amount: float, service_fee: float) -> float:

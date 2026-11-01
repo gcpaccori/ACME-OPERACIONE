@@ -101,8 +101,9 @@ def detect_huancavelica_coverage(
     lat: float | None,
     lng: float | None,
     fulfillment_type: str = "delivery",
+    config: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    config = load_tariff_config()
+    config = config or load_tariff_config()
     coverage = config.get("coverage") or {}
     coverage_label = str(coverage.get("label") or "Cobertura urbana ACME")
     point_count = len(_coverage_points(config))
@@ -245,8 +246,11 @@ def calculate_courier_tariff(
     destination_lng: float | None = None,
     origin_lat: float | None = None,
     origin_lng: float | None = None,
+    config: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    config = load_tariff_config()
+    # config: la del JSON con lo que el dueño cambio desde el admin encima
+    # (services_pricing.tariff_config). Sin ella, el JSON tal cual.
+    config = config or load_tariff_config()
     if fulfillment_type == "pickup":
         return {
             "tarifa_base": 0.0,

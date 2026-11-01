@@ -265,6 +265,12 @@ class CourierQuoteBranch(BaseModel):
     subtotal: float
     distance_km: Optional[float] = None
 
+class CourierQuoteGroup(BaseModel):
+    # Lo unico que ve el cliente al pagar: producto, envio y comision.
+    key: str
+    label: str
+    amount: float
+
 class CourierQuoteResponse(BaseModel):
     quote_id: str
     subtotal: float
@@ -305,6 +311,11 @@ class CourierQuoteResponse(BaseModel):
     multi_store_surcharge: float = 0.0
     multi_store_surcharge_rate: float = 0.0
     branches: List[CourierQuoteBranch] = Field(default_factory=list)
+    # Condicion que ACME pone en el precio de los productos; ya va dentro de
+    # service_fee para las apps viejas, y dentro de "Productos" en client_groups.
+    product_markup: float = 0.0
+    # Producto, envio y comision: suman el total menos la propina.
+    client_groups: List[CourierQuoteGroup] = Field(default_factory=list)
     expires_at: str
 
 class CourierReverseGeocodeResponse(BaseModel):

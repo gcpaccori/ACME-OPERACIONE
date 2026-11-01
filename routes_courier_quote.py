@@ -5,23 +5,23 @@ from typing import Any
 
 from fastapi import APIRouter, Header, HTTPException, Query
 
-from config import settings
-from models import CourierGeocodeSearchResult, CourierQuoteBranch, CourierQuoteRequest, CourierQuoteResponse, CourierReverseGeocodeResponse
+from models import CourierGeocodeSearchResult, CourierQuoteBranch, CourierQuoteGroup, CourierQuoteRequest, CourierQuoteResponse, CourierReverseGeocodeResponse
 from services_courier_quote import (
     SupabaseQuoteError,
     SupabaseQuoteService,
-    calculate_added_igv,
-    calculate_multi_store_surcharge,
-    calculate_payment_processing_fee,
     calculate_road_distance_km,
-    calculate_service_fee,
-    effective_service_fee_rate,
-    is_service_fee_exempt_category,
-    service_fee_base_amount,
     reverse_geocode_point,
     search_geocode_address,
 )
 from services_courier_tariffs import calculate_courier_tariff, detect_huancavelica_coverage
+from services_pricing import (
+    compute_order_pricing,
+    exempt_category_names,
+    load_pricing_config,
+    multi_store_surcharge,
+    normalize_category_name,
+    tariff_config,
+)
 from services_supabase_auth import SupabaseAuthError, verify_supabase_user
 
 router = APIRouter(prefix="/api/courier", tags=["courier-quote"])
@@ -59,6 +59,9 @@ def create_courier_quote(
         raise HTTPException(status_code=401, detail=str(exc)) from exc
 
     supabase = SupabaseQuoteService()
+    # Configuracion de cobros del admin (cache de 30 s; por defecto si no hay).
+    pricing = load_pricing_config()
+    tariff_cfg = tariff_config(pricing)
 
     try:
         # 1. Locales del pedido: el del pedido primero y luego los de los
@@ -71,7 +74,7 @@ def create_courier_quote(
         if not any((item.branch_id or payload.branch_id) == payload.branch_id for item in payload.items):
             raise HTTPException(status_code=422, detail="El local del pedido no tiene productos en el carrito.")
         try:
-            calculate_multi_store_surcharge(0, len(branch_ids))
+            multi_store_surcharge(pricing, 0, len(branch_ids))
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc))
 
@@ -83,7 +86,7 @@ def create_courier_quote(
             and client_lng is not None
             and not (client_lat == 0.0 and client_lng == 0.0)
         )
-        coverage = detect_huancavelica_coverage(client_lat, client_lng, payload.fulfillment_type)
+        coverage = detect_huancavelica_coverage(client_lat, client_lng, payload.fulfillment_type, config=tariff_cfg)
         manual_out_of_city = payload.is_out_of_city or (payload.zone or "").strip().upper() == "D"
         effective_is_out_of_city = bool(manual_out_of_city or coverage.get("is_out_of_city"))
         if manual_out_of_city and coverage.get("status") != "outside":
@@ -143,14 +146,13 @@ def create_courier_quote(
                 destination_lng=float(client_lng) if has_client_coords else None,
                 origin_lat=float(branch_lat) if has_branch_coords else None,
                 origin_lng=float(branch_lng) if has_branch_coords else None,
+                config=tariff_cfg,
             )
             branch_quotes[branch_id] = (branch_distance, branch_tariff)
 
         base_branch_id = max(branch_ids, key=lambda bid: float(branch_quotes[bid][1]["tarifa_final"]))
         distance_km, tariff = branch_quotes[base_branch_id]
         base_delivery_fee = float(tariff["tarifa_final"])
-        multi_store_surcharge, multi_store_rate = calculate_multi_store_surcharge(base_delivery_fee, len(branch_ids))
-        delivery_fee = round(base_delivery_fee + multi_store_surcharge, 2)
 
         # 5. Obtener precios reales de productos desde Supabase
         all_product_ids = list({item.product_id for item in payload.items})
@@ -160,11 +162,11 @@ def create_courier_quote(
         merchant_map: dict[str, str] = {str(row["id"]): str(row.get("merchant_id") or "") for row in products_rows}
         category_map: dict[str, str] = {str(row["id"]): str(row.get("category_id") or "") for row in products_rows}
 
-        # Categorias que ACME distribuye (p. ej. bebidas): sus productos no pagan
-        # tarifa de servicio, asi que se excluyen de la base de esa tarifa.
-        category_rows = supabase.get_categories(list(category_map.values()), token)
+        # Categorias exentas de la tarifa (p. ej. Bebidas ACME), segun la configuracion.
+        exempt_names = exempt_category_names(pricing)
+        category_rows = supabase.get_categories(list(category_map.values()), token) if exempt_names else []
         exempt_category_ids: set[str] = {
-            str(row["id"]) for row in category_rows if is_service_fee_exempt_category(row.get("name"))
+            str(row["id"]) for row in category_rows if normalize_category_name(row.get("name")) in exempt_names
         }
 
         # 6. Obtener deltas de modificadores
@@ -179,10 +181,9 @@ def create_courier_quote(
             modifier_map = {str(row["id"]): float(row.get("price_delta", 0)) for row in mod_rows}
 
         # 7. Calcular subtotal
-        subtotal = 0.0
-        service_fee_exempt_subtotal = 0.0
         branch_subtotals: dict[str, float] = {}
         items_snapshot: list[dict[str, Any]] = []
+        pricing_lines: list[dict[str, Any]] = []
         for item in payload.items:
             pid = item.product_id
             if pid not in price_map:
@@ -200,11 +201,14 @@ def create_courier_quote(
             unit_price = price_map[pid]
             mod_total = sum(modifier_map.get(mid, 0.0) for mid in item.modifier_ids)
             line_total = (unit_price + mod_total) * item.quantity
-            subtotal += line_total
             is_fee_exempt = category_map.get(pid, "") in exempt_category_ids
-            if is_fee_exempt:
-                service_fee_exempt_subtotal += line_total
             branch_subtotals[item_branch] = branch_subtotals.get(item_branch, 0.0) + line_total
+            pricing_lines.append({
+                "line_total": line_total,
+                "quantity": item.quantity,
+                "merchant_id": merchant_map.get(pid) or branch_merchant,
+                "exempt": is_fee_exempt,
+            })
             items_snapshot.append({
                 "branch_id": item_branch,
                 "product_id": pid,
@@ -217,42 +221,44 @@ def create_courier_quote(
                 "service_fee_exempt": is_fee_exempt,
             })
 
-        subtotal = round(subtotal, 2)
-        service_fee_exempt_subtotal = round(service_fee_exempt_subtotal, 2)
-
         # 8. Descuento (por ahora siempre 0)
         discount = 0.0
 
-        # 9. Base para tarifa de servicio. El cliente paga el precio completo de
-        # los productos (incluye bebidas). Las Bebidas ACME no suman a la base de
-        # la tarifa cuando acompañan a otros productos; pero si el pedido es solo
-        # Bebidas ACME, si pagan la tarifa (cubre el mantenimiento de ACME).
-        base = subtotal - discount
-        service_fee_base = service_fee_base_amount(base, service_fee_exempt_subtotal)
-
-        # 10. Tarifa ACME sobre el costo de los productos (acordado con Roger):
-        # 12% si suman hasta S/ 100; si pasan de S/ 100, 8%. La comision de la
-        # pasarela se cobra aparte, ademas de la tarifa.
-        service_fee = calculate_service_fee(service_fee_base)
-        service_fee_rate = effective_service_fee_rate(service_fee_base, service_fee)
-
-        # 11. Tip
-        tip_amount = round(float(payload.tip_amount), 2)
-
-        # 11a. IGV del cobro de ACME (envio + tarifa), sumado encima: el envio
-        # llega completo. El IGV de los productos lo emite el local, no ACME.
-        tax_breakdown = calculate_added_igv(round(service_fee + delivery_fee, 2))
-        igv_amount = float(tax_breakdown["igv_amount"])
-
-        # 13. Comision de la pasarela del medio de pago elegido, en su linea.
-        payment_base = round(base + delivery_fee + service_fee + igv_amount + tip_amount, 2)
+        # 9-13. Tarifa, condicion en productos, recargo por locales, IGV y
+        # comision de pago, todo con la configuracion de cobros del admin.
         try:
-            processing = calculate_payment_processing_fee(payment_base, payload.payment_method)
+            priced = compute_order_pricing(
+                pricing,
+                lines=pricing_lines,
+                delivery_fee=base_delivery_fee,
+                branch_count=len(branch_ids),
+                tip=float(payload.tip_amount),
+                payment_method=payload.payment_method,
+                fulfillment_type=payload.fulfillment_type,
+            )
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc))
-        payment_processing_fee = float(processing["fee"])
-        payment_processing_note = str(processing["note"])
-        total = round(payment_base + payment_processing_fee, 2)
+
+        subtotal = priced["products"]
+        multi_store_surcharge_amount = priced["multi_store_surcharge"]
+        multi_store_rate = priced["multi_store_rate"]
+        delivery_fee = round(priced["delivery_fee"] + multi_store_surcharge_amount, 2)
+        # La condicion en productos es de ACME: en los campos de siempre viaja
+        # dentro de service_fee (subtotal sigue siendo lo que recibe el local).
+        service_fee = round(priced["service_fee"] + priced["product_markup"], 2)
+        service_fee_base = priced["service_fee_base"]
+        service_fee_rate = min(9.9999, round(priced["service_fee_rate"], 4)) if priced["service_fee"] > 0 else 0.0
+        tip_amount = priced["tip"]
+        tax_breakdown = {
+            "taxable_base": priced["taxable_base"],
+            "igv_rate": priced["igv_rate"],
+            "igv_amount": priced["igv_amount"],
+        }
+        igv_added = bool(priced["igv_added"])
+        processing = priced["gateway"]
+        payment_processing_fee = float(priced["gateway_fee"])
+        payment_processing_note = str(processing.get("note") or "")
+        total = priced["total"]
 
         # 13a. Yape directo: el APK de la app cliente ya instalado solo ofrece
         # Yape directo si la comision de pago viene en cero, asi que la de BCP
@@ -261,8 +267,6 @@ def create_courier_quote(
         yape_directo_fee = 0.0
         if processing.get("provider") == "yape_propio" and payment_processing_fee > 0:
             yape_directo_fee = payment_processing_fee
-            # service_fee_rate queda en la tasa del tramo (12%/8% de los productos): las
-            # apps la muestran como "Tarifa de servicio (12%)".
             service_fee = round(service_fee + yape_directo_fee, 2)
             payment_processing_fee = 0.0
 
@@ -310,7 +314,7 @@ def create_courier_quote(
             taxable_base=float(tax_breakdown["taxable_base"]),
             igv_rate=float(tax_breakdown["igv_rate"]),
             igv_amount=float(tax_breakdown["igv_amount"]),
-            igv_added=True,
+            igv_added=igv_added,
             payment_processing_fee=payment_processing_fee,
             yape_directo_fee=yape_directo_fee,
             payment_processing_rate=float(processing["rate"]),
@@ -330,7 +334,7 @@ def create_courier_quote(
             delivery_surcharges_total=float(tariff.get("recargos_total") or 0),
             delivery_surcharges=tariff.get("recargos") or [],
             branch_count=len(branch_ids),
-            multi_store_surcharge=multi_store_surcharge,
+            multi_store_surcharge=multi_store_surcharge_amount,
             multi_store_surcharge_rate=multi_store_rate,
             branches=[
                 CourierQuoteBranch(
@@ -340,6 +344,8 @@ def create_courier_quote(
                 )
                 for bid in branch_ids
             ],
+            product_markup=priced["product_markup"],
+            client_groups=[CourierQuoteGroup(**g) for g in priced["client_groups"]],
             expires_at=str(quote.get("expires_at", "")),
         )
 

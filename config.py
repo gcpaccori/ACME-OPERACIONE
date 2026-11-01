@@ -132,6 +132,9 @@ class Settings(BaseSettings):
     # dentro de la tarifa de servicio: esta tasa es la parte del total que
     # yapea el cliente (3.5% = 2.98% + el IGV que lleva la tarifa).
     yape_directo_fee_rate: float = float(os.getenv("YAPE_DIRECTO_FEE_RATE", "0.035"))
+    # Lo que BCP le descuenta de verdad a ACME por cada yapeo (Yape empresa).
+    # Solo sirve para el desglose interno del admin (cuanto le queda a ACME).
+    yape_directo_cost_rate: float = float(os.getenv("YAPE_DIRECTO_COST_RATE", "0.0298"))
 
     @field_validator("debug", "skip_legacy_db_init", mode="before")
     @classmethod
