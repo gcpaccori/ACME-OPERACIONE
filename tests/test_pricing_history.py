@@ -112,6 +112,27 @@ def test_desglose_del_pedido_y_cuadre_por_version(fake_db):
     assert s["payout"]["Local"] == 16.0
 
 
+def test_varios_locales_cuadra_con_el_total_del_checkout(fake_db):
+    # El pedido principal guarda solo su parte en "total", pero el desglose es de todo el checkout.
+    b = {"version": 1, "total": 41.5, "payout": [{"to": "Local", "amount": 30.0}, {"to": "ACME", "amount": 11.5}]}
+    fake_db["orders"] = [{"pricing_version": 1, "total": 31.5, "payment_status": "paid", "status": "delivered", "pricing_breakdown": b}]
+    s = sp.order_stats_by_version([1])["1"]
+    assert s["paid_total"] == 41.5 == round(sum(s["payout"].values()), 2)
+
+
+def test_cuadre_lee_todas_las_paginas(fake_db, monkeypatch):
+    pedidos = [{"id": i, "pricing_version": 2, "total": 1, "payment_status": "paid", "status": "delivered",
+                "pricing_breakdown": {"total": 1, "payout": [{"to": "Local", "amount": 1}]}} for i in range(2500)]
+
+    def get(url, headers=None, params=None, timeout=None):
+        off, lim = int(params["offset"]), int(params["limit"])
+        return Resp(200, pedidos[off:off + lim])
+
+    monkeypatch.setattr(sp.requests, "get", get)
+    s = sp.order_stats_by_version([2])["2"]
+    assert s["orders"] == 2500 and s["paid_total"] == 2500
+
+
 def test_volver_a_una_version(fake_db, monkeypatch):
     import routes_admin_pricing as rap
 

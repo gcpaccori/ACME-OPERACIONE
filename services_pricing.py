@@ -446,19 +446,48 @@ def order_stats_by_version(version_ids: list[int]) -> dict[str, dict[str, Any]]:
     stats: dict[str, dict[str, Any]] = {}
     if not version_ids:
         return stats
-    resp = requests.get(
-        _sb_url("orders"),
-        headers=_sb_headers(),
-        params={
-            "select": "pricing_version,total,payment_status,status,pricing_breakdown",
-            "pricing_version": f"in.({','.join(str(int(v)) for v in version_ids)})",
-            "limit": "10000",
-        },
-        timeout=12,
-    )
-    if resp.status_code >= 400:
-        logger.warning("pricing_history_stats_failed status=%s body=%s", resp.status_code, resp.text[:200])
-        return stats
+    ids = ",".join(str(int(v)) for v in version_ids)
+    rows: list[dict[str, Any]] = []
+    page = 1000
+    offset = 0
+    while True:
+        # Por paginas y en orden fijo: un cuadre con pedidos faltantes no sirve.
+        resp = requests.get(
+            _sb_url("orders"),
+            headers=_sb_headers(),
+            params={
+                "select": "id,pricing_version,total,payment_status,status,pricing_breakdown",
+                "pricing_version": f"in.({ids})",
+                "order": "id.asc",
+                "limit": str(page),
+                "offset": str(offset),
+            },
+            timeout=12,
+        )
+        if resp.status_code >= 400:
+            logger.warning("pricing_history_stats_failed status=%s body=%s", resp.status_code, resp.text[:200])
+            raise RuntimeError("No se pudieron leer los pedidos para cuadrar el historial.")
+        batch = resp.json() or []
+        rows.extend(batch)
+        if len(batch) < page:
+            break
+        offset += page
+    for row in rows:
+        key = str(row.get("pricing_version"))
+        s = stats.setdefault(key, {"orders": 0, "paid_orders": 0, "paid_total": 0.0, "payout": {}})
+        s["orders"] += 1
+        if not _counts_as_collected(row):
+            continue
+        breakdown = row.get("pricing_breakdown") or {}
+        s["paid_orders"] += 1
+        # Con varios locales el pedido principal lleva el desglose de todo el checkout,
+        # pero su "total" es solo su parte: se suma el total del desglose para que cuadre con el reparto.
+        total = breakdown.get("total") if breakdown.get("total") is not None else row.get("total")
+        s["paid_total"] = round(s["paid_total"] + float(total or 0), 2)
+        for part in (breakdown.get("payout") or []):
+            to = str(part.get("to") or "")
+            s["payout"][to] = round(s["payout"].get(to, 0.0) + float(part.get("amount") or 0), 2)
+    return stats
     for row in resp.json() or []:
         key = str(row.get("pricing_version"))
         s = stats.setdefault(key, {"orders": 0, "paid_orders": 0, "paid_total": 0.0, "payout": {}})
