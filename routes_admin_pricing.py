@@ -19,6 +19,7 @@ from services_pricing import (
     compute_order_pricing,
     default_config,
     fetch_history,
+    fetch_history_entry,
     fetch_stored_row,
     gateway_costs,
     load_pricing_config,
@@ -54,6 +55,12 @@ def _verificar_admin(authorization: str | None) -> str:
 
 class SaveConfigRequest(BaseModel):
     config: dict[str, Any]
+    # Motivo del cambio, queda en el historial.
+    note: Optional[str] = Field(default=None, max_length=500)
+
+
+class RestoreRequest(BaseModel):
+    note: Optional[str] = Field(default=None, max_length=500)
 
 
 class SimItem(BaseModel):
@@ -95,6 +102,7 @@ def get_config(authorization: str | None = Header(default=None)):
         "saved": bool(row),
         "updated_at": (row or {}).get("updated_at"),
         "updated_by": (row or {}).get("updated_by"),
+        "version_id": (row or {}).get("version_id"),
         "gateway_costs": gateway_costs(),
         "coverage": tariff_config(default_config()).get("coverage") or {},
     }
@@ -104,7 +112,7 @@ def get_config(authorization: str | None = Header(default=None)):
 def put_config(payload: SaveConfigRequest, authorization: str | None = Header(default=None)):
     user_id = _verificar_admin(authorization)
     try:
-        saved = save_pricing_config(payload.config, user_id)
+        saved = save_pricing_config(payload.config, user_id, payload.note)
     except PricingConfigError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except RuntimeError as exc:
@@ -117,6 +125,23 @@ def put_config(payload: SaveConfigRequest, authorization: str | None = Header(de
 def get_history(authorization: str | None = Header(default=None)):
     _verificar_admin(authorization)
     return {"items": fetch_history()}
+
+
+@router.post("/history/{version_id}/restore")
+def restore_version(version_id: int, payload: RestoreRequest | None = None, authorization: str | None = Header(default=None)):
+    user_id = _verificar_admin(authorization)
+    entry = fetch_history_entry(version_id)
+    if not entry or not isinstance(entry.get("config"), dict):
+        raise HTTPException(status_code=404, detail=f"No existe la version {version_id}.")
+    note = (payload.note if payload else None) or f"Se volvio a la version {version_id}."
+    try:
+        saved = save_pricing_config(entry["config"], user_id, note)
+    except PricingConfigError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    logger.info("pricing_config_restored version=%s by=%s", version_id, user_id)
+    return saved
 
 
 def simulate(payload: SimulateRequest) -> dict[str, Any]:

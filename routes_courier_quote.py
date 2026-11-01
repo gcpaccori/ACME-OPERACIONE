@@ -17,9 +17,10 @@ from services_courier_tariffs import calculate_courier_tariff, detect_huancaveli
 from services_pricing import (
     compute_order_pricing,
     exempt_category_names,
-    load_pricing_config,
+    load_pricing_config_with_version,
     multi_store_surcharge,
     normalize_category_name,
+    pricing_breakdown,
     tariff_config,
 )
 from services_supabase_auth import SupabaseAuthError, verify_supabase_user
@@ -60,7 +61,7 @@ def create_courier_quote(
 
     supabase = SupabaseQuoteService()
     # Configuracion de cobros del admin (cache de 30 s; por defecto si no hay).
-    pricing = load_pricing_config()
+    pricing, pricing_version = load_pricing_config_with_version()
     tariff_cfg = tariff_config(pricing)
 
     try:
@@ -294,6 +295,8 @@ def create_courier_quote(
             payment_processing_provider=str(processing["provider"]),
             payment_processing_note=payment_processing_note,
             payment_processing_tax_amount=float(processing["tax_amount"]),
+            pricing_version=pricing_version,
+            pricing_breakdown=pricing_breakdown(priced, pricing_version),
             bearer_token=token,
         )
 

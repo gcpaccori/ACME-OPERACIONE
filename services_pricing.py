@@ -240,7 +240,7 @@ def fetch_stored_row(force: bool = False) -> dict[str, Any] | None:
         resp = requests.get(
             _sb_url(TABLE),
             headers=_sb_headers(),
-            params={"select": "config,updated_at,updated_by", "id": f"eq.{ROW_ID}", "limit": "1"},
+            params={"select": "*", "id": f"eq.{ROW_ID}", "limit": "1"},
             timeout=6,
         )
         if resp.status_code < 400:
@@ -282,21 +282,113 @@ def merge_config(override: dict[str, Any] | None) -> dict[str, Any]:
 
 def load_pricing_config() -> dict[str, Any]:
     """Configuracion vigente: la guardada por el admin encima de los valores por defecto."""
+    return load_pricing_config_with_version()[0]
+
+
+def load_pricing_config_with_version() -> tuple[dict[str, Any], int | None]:
+    """(configuracion vigente, numero de version con que se cobra; None = valores de siempre)."""
     row = fetch_stored_row()
     stored = (row or {}).get("config") if isinstance(row, dict) else None
     if not isinstance(stored, dict):
-        return default_config()
+        return default_config(), None
+    version = (row or {}).get("version_id")
+    version = int(version) if version is not None else None
     try:
-        return validate_config(merge_config(stored))
+        return validate_config(merge_config(stored)), version
     except PricingConfigError as exc:
         logger.error("pricing_config_invalid_using_defaults error=%s", exc)
-        return default_config()
+        return default_config(), None
 
 
-def save_pricing_config(config: dict[str, Any], user_id: str) -> dict[str, Any]:
+# Nombres que entiende el dueño para cada parte de la configuracion.
+_SECTION_LABELS = {
+    "service_fee": "Tarifa de servicio",
+    "product_markup": "Condición en productos",
+    "merchant_rules": "Reglas por negocio",
+    "multi_store": "Recargo por varios locales",
+    "delivery": "Envío",
+    "igv": "IGV",
+    "gateways": "Pasarelas",
+    "display": "Lo que ve el cliente",
+}
+_FIELD_LABELS = {
+    "enabled": "activa", "base": "se cobra sobre", "tier_by": "tramo según", "tier_mode": "forma del tramo",
+    "tiers": "tramos", "fixed": "monto fijo", "min": "mínimo", "max": "máximo",
+    "exempt_categories": "categorías exentas", "exempt_only_orders_pay": "pedido solo de exentos paga",
+    "group": "grupo para el cliente", "rate": "porcentaje", "fixed_per_unit": "fijo por unidad",
+    "rates": "porcentajes", "max_amount": "tope", "rounding_increment": "redondeo",
+    "rounding_mode": "forma de redondeo", "service_surcharges": "recargos por servicio", "weight": "peso",
+    "difficult_zone_fee": "zona difícil", "wait_or_second_visit_fee": "espera o segunda visita",
+    "outside_city": "fuera de la ciudad", "zones": "zonas", "sector_pricing": "precios del mapa",
+    "center_fee": "precio del centro", "points": "puntos del mapa", "mode": "modo",
+    "applies_to": "se aplica a", "labels": "nombres", "yape_directo": "Yape directo", "izipay": "Izipay",
+    "culqi_yape": "Culqi Yape", "culqi_card": "Culqi tarjeta", "delivery": "envío",
+    "multi_store": "recargo por locales", "service_fee": "tarifa de servicio",
+    "product_markup": "condición en productos", "base_fee": "base", "cost_per_km": "por km",
+}
+
+
+def _short(value: Any) -> Any:
+    if isinstance(value, list) and len(value) > 6:
+        return f"{len(value)} elementos"
+    return value
+
+
+def describe_changes(before: dict[str, Any], after: dict[str, Any]) -> list[dict[str, Any]]:
+    """Lista de lo que cambio entre dos configuraciones, con nombres legibles."""
+    changes: list[dict[str, Any]] = []
+
+    def label(path: list[str]) -> str:
+        head = _SECTION_LABELS.get(path[0], path[0])
+        rest = [_FIELD_LABELS.get(p, p) for p in path[1:]]
+        return " › ".join([head, *rest])
+
+    def walk(a: Any, b: Any, path: list[str]) -> None:
+        if a == b:
+            return
+        if isinstance(a, dict) and isinstance(b, dict):
+            for key in sorted(set(a) | set(b), key=str):
+                walk(a.get(key), b.get(key), [*path, str(key)])
+            return
+        if path and path[-1] == "points" and isinstance(a, list) and isinstance(b, list):
+            key = lambda p: (round(float(p.get("lat", 0)), 6), round(float(p.get("lng", 0)), 6))
+            old = {key(p): p for p in a}
+            new = {key(p): p for p in b}
+            changed = sum(1 for k in old.keys() & new.keys() if old[k].get("fee") != new[k].get("fee"))
+            added, removed = len(new.keys() - old.keys()), len(old.keys() - new.keys())
+            parts = [f"{n} {t}" for n, t in ((changed, "con otro precio"), (added, "nuevos"), (removed, "quitados")) if n]
+            changes.append({"path": ".".join(path), "label": label(path), "before": f"{len(a)} puntos",
+                            "after": f"{len(b)} puntos ({', '.join(parts)})" if parts else f"{len(b)} puntos"})
+            return
+        changes.append({"path": ".".join(path), "label": label(path), "before": _short(a), "after": _short(b)})
+
+    walk(before or {}, after or {}, [])
+    return changes
+
+
+def save_pricing_config(config: dict[str, Any], user_id: str, note: str | None = None) -> dict[str, Any]:
+    """Guarda una version nueva. El historial va primero: sin historial no se guarda,
+    para que cada pedido se pueda cuadrar con la tarifa con que se cobro."""
     clean = validate_config(merge_config(config))
+    clear_cache()  # comparar contra lo ultimo guardado, no contra el cache
+    previous, previous_version = load_pricing_config_with_version()
+    changes = describe_changes(previous, clean)
+    note = (note or "").strip()[:500] or None
+    hist = requests.post(
+        _sb_url(HISTORY_TABLE),
+        headers=_sb_headers("return=representation"),
+        json={"config": clean, "updated_by": user_id, "note": note, "changes": changes,
+              "previous_version_id": previous_version},
+        timeout=8,
+    )
+    if hist.status_code >= 400:
+        raise RuntimeError(
+            "No se pudo guardar el historial de cobros, asi que no se guardo el cambio. Si la tabla "
+            f"pricing_config_history no existe, falta correr la migracion. Detalle: {hist.text[:300]}"
+        )
+    version_id = int((hist.json() or [{}])[0].get("id"))
     now = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-    payload = {"id": ROW_ID, "config": clean, "updated_at": now, "updated_by": user_id}
+    payload = {"id": ROW_ID, "config": clean, "updated_at": now, "updated_by": user_id, "version_id": version_id}
     resp = requests.post(
         _sb_url(TABLE),
         headers=_sb_headers("resolution=merge-duplicates,return=representation"),
@@ -309,31 +401,148 @@ def save_pricing_config(config: dict[str, Any], user_id: str) -> dict[str, Any]:
             "No se pudo guardar la configuracion de cobros. Si la tabla pricing_config no existe, "
             f"falta correr la migracion. Detalle: {resp.text[:300]}"
         )
-    try:
-        requests.post(
-            _sb_url(HISTORY_TABLE),
-            headers=_sb_headers("return=minimal"),
-            json={"config": clean, "updated_by": user_id},
-            timeout=6,
-        )
-    except Exception as exc:  # pragma: no cover - el historial no frena el guardado
-        logger.warning("pricing_history_failed error=%s", exc)
     clear_cache()
-    return {"config": clean, "updated_at": now, "updated_by": user_id}
+    return {"config": clean, "updated_at": now, "updated_by": user_id, "version_id": version_id, "changes": changes}
 
 
-def fetch_history(limit: int = 20) -> list[dict[str, Any]]:
+def fetch_history_entry(version_id: int) -> dict[str, Any] | None:
+    resp = requests.get(
+        _sb_url(HISTORY_TABLE),
+        headers=_sb_headers(),
+        params={"select": "*", "id": f"eq.{int(version_id)}", "limit": "1"},
+        timeout=8,
+    )
+    if resp.status_code >= 400:
+        return None
+    rows = resp.json() or []
+    return rows[0] if rows else None
+
+
+def _names_for(user_ids: set[str]) -> dict[str, str]:
+    if not user_ids:
+        return {}
+    resp = requests.get(
+        _sb_url("profiles"),
+        headers=_sb_headers(),
+        params={"select": "user_id,full_name,email", "user_id": f"in.({','.join(sorted(user_ids))})"},
+        timeout=8,
+    )
+    if resp.status_code >= 400:
+        return {}
+    return {str(r["user_id"]): str(r.get("full_name") or r.get("email") or "") for r in resp.json() or []}
+
+
+def _counts_as_collected(row: dict[str, Any]) -> bool:
+    # Pagado en linea, o entregado (efectivo). Cancelados y devueltos no cuentan.
+    status = str(row.get("status") or "").lower()
+    payment = str(row.get("payment_status") or "").lower()
+    if status == "cancelled" or payment == "refunded":
+        return False
+    return payment == "paid" or status == "delivered"
+
+
+def order_stats_by_version(version_ids: list[int]) -> dict[str, dict[str, Any]]:
+    """Por version: pedidos cobrados con ella y cuanto le toca a cada quien (solo pagados)."""
+    stats: dict[str, dict[str, Any]] = {}
+    if not version_ids:
+        return stats
+    ids = ",".join(str(int(v)) for v in version_ids)
+    rows: list[dict[str, Any]] = []
+    page = 1000
+    offset = 0
+    while True:
+        # Por paginas y en orden fijo: un cuadre con pedidos faltantes no sirve.
+        resp = requests.get(
+            _sb_url("orders"),
+            headers=_sb_headers(),
+            params={
+                "select": "id,pricing_version,total,payment_status,status,pricing_breakdown",
+                "pricing_version": f"in.({ids})",
+                "order": "id.asc",
+                "limit": str(page),
+                "offset": str(offset),
+            },
+            timeout=12,
+        )
+        if resp.status_code >= 400:
+            logger.warning("pricing_history_stats_failed status=%s body=%s", resp.status_code, resp.text[:200])
+            raise RuntimeError("No se pudieron leer los pedidos para cuadrar el historial.")
+        batch = resp.json() or []
+        rows.extend(batch)
+        if len(batch) < page:
+            break
+        offset += page
+    for row in rows:
+        key = str(row.get("pricing_version"))
+        s = stats.setdefault(key, {"orders": 0, "paid_orders": 0, "paid_total": 0.0, "payout": {}})
+        s["orders"] += 1
+        if not _counts_as_collected(row):
+            continue
+        breakdown = row.get("pricing_breakdown") or {}
+        s["paid_orders"] += 1
+        # Con varios locales el pedido principal lleva el desglose de todo el checkout,
+        # pero su "total" es solo su parte: se suma el total del desglose para que cuadre con el reparto.
+        total = breakdown.get("total") if breakdown.get("total") is not None else row.get("total")
+        s["paid_total"] = round(s["paid_total"] + float(total or 0), 2)
+        for part in (breakdown.get("payout") or []):
+            to = str(part.get("to") or "")
+            s["payout"][to] = round(s["payout"].get(to, 0.0) + float(part.get("amount") or 0), 2)
+    return stats
+    for row in resp.json() or []:
+        key = str(row.get("pricing_version"))
+        s = stats.setdefault(key, {"orders": 0, "paid_orders": 0, "paid_total": 0.0, "payout": {}})
+        s["orders"] += 1
+        if not _counts_as_collected(row):
+            continue
+        s["paid_orders"] += 1
+        s["paid_total"] = round(s["paid_total"] + float(row.get("total") or 0), 2)
+        for part in ((row.get("pricing_breakdown") or {}).get("payout") or []):
+            to = str(part.get("to") or "")
+            s["payout"][to] = round(s["payout"].get(to, 0.0) + float(part.get("amount") or 0), 2)
+    return stats
+
+
+def fetch_history(limit: int = 50) -> list[dict[str, Any]]:
     if not settings.supabase_url or not settings.supabase_service_role_key:
         return []
     resp = requests.get(
         _sb_url(HISTORY_TABLE),
         headers=_sb_headers(),
-        params={"select": "id,created_at,updated_by,config", "order": "created_at.desc", "limit": str(limit)},
+        params={"select": "*", "order": "created_at.desc", "limit": str(limit)},
         timeout=8,
     )
     if resp.status_code >= 400:
         return []
-    return resp.json() or []
+    rows = resp.json() or []
+    names = _names_for({str(r["updated_by"]) for r in rows if r.get("updated_by")})
+    stats = order_stats_by_version([int(r["id"]) for r in rows])
+    current = (fetch_stored_row(force=True) or {}).get("version_id")
+    empty = {"orders": 0, "paid_orders": 0, "paid_total": 0.0, "payout": {}}
+    return [
+        {
+            **r,
+            "version": r["id"],
+            "updated_by_name": names.get(str(r.get("updated_by") or ""), ""),
+            "is_current": current is not None and int(current) == int(r["id"]),
+            "stats": stats.get(str(r["id"]), empty),
+        }
+        for r in rows
+    ]
+
+
+def pricing_breakdown(priced: dict[str, Any], version: int | None) -> dict[str, Any]:
+    """Lo que se guarda en cada pedido para cuadrarlo despues: con que version se cobro y a quien va cada sol."""
+    gw = priced.get("gateway") or {}
+    return {
+        "version": version,
+        "total": priced.get("total"),
+        "client_groups": priced.get("client_groups"),
+        "concepts": [{k: c.get(k) for k in ("key", "label", "amount", "to", "group")} for c in priced.get("concepts") or []],
+        "payout": priced.get("payout"),
+        "gateway": {"key": gw.get("key"), "mode": gw.get("mode"), "provider": gw.get("provider")},
+        "gateway_cost": priced.get("gateway_cost"),
+        "acme_net": priced.get("acme_net"),
+    }
 
 
 # ---------------------------------------------------------------------------
