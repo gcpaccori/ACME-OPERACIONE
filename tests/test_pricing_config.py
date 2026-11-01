@@ -188,3 +188,17 @@ def test_simulador_con_mapa_usa_los_precios_editados(monkeypatch):
     ))
     assert out["delivery"]["source"] == "map"
     assert out["delivery"]["fee"] == 20.0
+
+
+def test_igv_incluido_reporta_base_sin_impuesto():
+    r = torta(con(igv__mode="included"))
+    assert r["taxable_base"] == round(7.96 - r["igv_amount"], 2)
+
+
+def test_tope_yape_directo_cuenta_la_comision_en_modo_costo(monkeypatch):
+    monkeypatch.setattr(settings, "yape_propio_max_centimos", 10000)
+    cfg = con(gateways__yape_directo={"mode": "cost", "rate": 0, "fixed": 0})
+    from services_pricing import gateway_fee
+    # S/ 98 + 2.98% pasa los S/ 100: debe cotizarse como Yape normal.
+    assert gateway_fee(cfg, "yape_directo", 98.0)["key"] != "yape_directo"
+    assert gateway_fee(cfg, "yape_directo", 50.0)["key"] == "yape_directo"

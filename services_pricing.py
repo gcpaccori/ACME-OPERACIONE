@@ -598,7 +598,12 @@ def gateway_fee(cfg: dict[str, Any], payment_method: str, amount: float) -> dict
     if key == "yape_directo":
         from config import yape_propio_aplica
 
-        tentative = amount + (_gross_up(amount, g["rate"], g["fixed"]) if mode == "percent" else 0.0)
+        if mode == "percent":
+            tentative = amount + _gross_up(amount, g["rate"], g["fixed"])
+        elif mode == "cost":
+            tentative = amount + _gross_up(amount, float(settings.yape_directo_cost_rate), 0.0)
+        else:
+            tentative = amount
         if not yape_propio_aplica(payment_method, int(round(tentative * 100))):
             # Yape directo apagado o sobre el tope: se cotiza como Yape normal.
             return gateway_fee(cfg, "yape", amount)
@@ -810,7 +815,8 @@ def compute_order_pricing(
         "igv_amount": igv_total,
         "igv_added": igv_added,
         "igv_by": igv_by,
-        "taxable_base": taxable_sum,
+        # Base sin impuesto: en "incluido" taxable_sum ya trae el IGV dentro.
+        "taxable_base": round(taxable_sum - igv_total, 2) if (igv_total and not igv_added) else taxable_sum,
         "tip": tip,
         "gateway": gw,
         "gateway_fee": gateway,
